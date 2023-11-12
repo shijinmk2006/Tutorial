@@ -1,5 +1,4 @@
-var query = from row in dt.AsEnumerable()
-            let date = row.Field<DateTime>("Date")
-            where date.Year == year && date.Month == month && !DateTime.TryParseExact(date.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime date)
-            select row;
-DataRow[] filteredRows = query.ToArray();
+
+var filteredRows = dataTable.AsEnumerable()
+        .Where(row => DateTime.TryParse(row["Date"].ToString(), out DateTime date) && date.Year == year && date.Month == month)
+        .Select(row => row);
