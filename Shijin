@@ -1,1 +1,5 @@
-DataRow[] filteredRows = dt.Select("Year(Date) = 2023 AND Month(Date) = 4 AND NOT DateTime.TryParseExact(Convert(Date, 'System.String'), 'yyyy-MM-dd', CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime date)");
+var query = from row in dt.AsEnumerable()
+            let date = row.Field<DateTime>("Date")
+            where date.Year == year && date.Month == month && !DateTime.TryParseExact(date.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime date)
+            select row;
+DataRow[] filteredRows = query.ToArray();
