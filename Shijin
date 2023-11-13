@@ -1,32 +1,23 @@
+for (int i = 1; i <= worksheet.Cells.MaxDataRow; i++)
+{
+    DateTime payDate = worksheet.Cells[i, offCycleFilterColumns[OffCycleFilter.PayrollPayDate]].DateTimeValue;
 
-var filteredRows = dataTable.AsEnumerable()
-        .Where(row => DateTime.TryParse(row["Date"].ToString(), out DateTime date) && date.Year == year && date.Month == month)
-        .Select(row => row);
+    DateTime endDate;
 
+    if (offCycleFilterColumns.ContainsKey(OffCycleFilter.PeriodEndDate))
+        endDate = worksheet.Cells[i, offCycleFilterColumns[OffCycleFilter.PeriodEndDate]].DateTimeValue;
+    else // if offCycleFilterColumns.ContainsKey(OffCycleFilter.ProcessEndDate))
+        endDate = worksheet.Cells[i, offCycleFilterColumns[OffCycleFilter.ProcessEndDate]].DateTimeValue;
 
-//Create a workbook object
-Workbook workbook = new Workbook();
+    string payCycleName = worksheet.Cells[i, offCycleFilterColumns[OffCycleFilter.PayCycle]].StringValue.Trim().ToUpper();
 
-//Access the first worksheet
-Worksheet worksheet = workbook.Worksheets[0];
+    if (!payCycles.ContainsKey(payCycleName))
+        continue;
 
-//Populate some data in column A
-worksheet.Cells["A1"].PutValue("Date");
-worksheet.Cells["A2"].PutValue(new DateTime(2023, 1, 1));
-worksheet.Cells["A3"].PutValue(new DateTime(2023, 1, 15));
-worksheet.Cells["A4"].PutValue(new DateTime(2023, 2, 1));
-worksheet.Cells["A5"].PutValue(new DateTime(2023, 2, 15));
-worksheet.Cells["A6"].PutValue(new DateTime(2023, 3, 1));
-worksheet.Cells["A7"].PutValue(new DateTime(2023, 3, 15));
-worksheet.Cells["A8"].PutValue(new DateTime(2023, 4, 1));
-worksheet.Cells["A9"].PutValue(new DateTime(2023, 4, 15));
-worksheet.Cells["A10"].PutValue(new DateTime(2023, 5, 1));
+    PayCycle payCycle = payCycles[payCycleName];
 
-//Apply autofilter to the range A1:A10
-worksheet.AutoFilter.Range = "A1:A10";
+    if (!rows.ContainsKey((payDate, endDate, payCycle)))
+        rows.Add((payDate, endDate, payCycle), new List<int>());
 
-//Filter the date column by January 2023
-worksheet.AutoFilter.Custom(0, FilterOperatorType.Equal, "1/2023");
-
-//Save the workbook
-workbook.Save("output.xlsx");
+    rows[(payDate, endDate, payCycle)].Add(i);
+}
