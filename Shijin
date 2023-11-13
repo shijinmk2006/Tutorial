@@ -1,27 +1,60 @@
-for (int i = 1; i <= worksheet.Cells.MaxDataRow; i++)
+
+Dictionary<(DateTime, DateTime, PayCycle), List<int>> ParseOffCycleFilterRows(Worksheet worksheet, Dictionary<OffCycleFilter, int> offCycleFilterColumns)
 {
-    DateTime payDate = worksheet.Cells[i, offCycleFilterColumns[OffCycleFilter.PayrollPayDate]].DateTimeValue;
 
-    DateTime endDate;
+    Dictionary<(DateTime, DateTime, PayCycle), List<int>> rows = new();
 
-    if (offCycleFilterColumns.ContainsKey(OffCycleFilter.PeriodEndDate))
-        endDate = worksheet.Cells[i, offCycleFilterColumns[OffCycleFilter.PeriodEndDate]].DateTimeValue;
-    else // if offCycleFilterColumns.ContainsKey(OffCycleFilter.ProcessEndDate))
-        endDate = worksheet.Cells[i, offCycleFilterColumns[OffCycleFilter.ProcessEndDate]].DateTimeValue;
+    // Get pay cycle values from database
+    Dictionary<string, PayCycle> payCycles = new()
+    {
+        { "Monthly".Trim().ToUpper(), PayCycle.Monthly },
+        { "SemiMonthly".Trim().ToUpper(), PayCycle.SemiMonthly },
+        { "EL Semi-Monthly".Trim().ToUpper(), PayCycle.SemiMonthly },
+        { "PR Semi-Monthly".Trim().ToUpper(), PayCycle.SemiMonthly },
+        { "Weekly".Trim().ToUpper(), PayCycle.Weekly },
+        { "Aveda Weekly".Trim().ToUpper(), PayCycle.Weekly },
+        { "EL Weekly".Trim().ToUpper(), PayCycle.Weekly },
+        { "Northtec Weekly".Trim().ToUpper(), PayCycle.Weekly },
+        { "PR Weekly".Trim().ToUpper(), PayCycle.Weekly }
+    };
 
-    string payCycleName = worksheet.Cells[i, offCycleFilterColumns[OffCycleFilter.PayCycle]].StringValue.Trim().ToUpper();
+    for (int i = 1; i <= worksheet.Cells.MaxDataRow; i++)
+    {
+        DateTime payDate = worksheet.Cells[i, offCycleFilterColumns[OffCycleFilter.PayrollPayDate]].DateTimeValue;
 
-    if (!payCycles.ContainsKey(payCycleName))
-        continue;
+        DateTime endDate;
 
-    PayCycle payCycle = payCycles[payCycleName];
+        if (offCycleFilterColumns.ContainsKey(OffCycleFilter.PeriodEndDate))
+            endDate = worksheet.Cells[i, offCycleFilterColumns[OffCycleFilter.PeriodEndDate]].DateTimeValue;
+        else // if offCycleFilterColumns.ContainsKey(OffCycleFilter.ProcessEndDate))
+            endDate = worksheet.Cells[i, offCycleFilterColumns[OffCycleFilter.ProcessEndDate]].DateTimeValue;
 
-    if (!rows.ContainsKey((payDate, endDate, payCycle)))
-        rows.Add((payDate, endDate, payCycle), new List<int>());
+        string payCycleName = worksheet.Cells[i, offCycleFilterColumns[OffCycleFilter.PayCycle]].StringValue.Trim().ToUpper();
 
-    rows[(payDate, endDate, payCycle)].Add(i);
+        if (!payCycles.ContainsKey(payCycleName))
+            continue;
+
+        PayCycle payCycle = payCycles[payCycleName];
+
+        if (!rows.ContainsKey((payDate, endDate, payCycle)))
+            rows.Add((payDate, endDate, payCycle), new List<int>());
+
+        rows[(payDate, endDate, payCycle)].Add(i);
+    }
+
+    return rows;
+}
+public enum OffCycleFilter
+{
+    PayrollPayDate,
+    PeriodEndDate,
+    ProcessEndDate,
+    PayCycle
 }
 
-
-
-var result = worksheet .SelectMany (row => new[] {row [offCycleFilterColumns [OffCycleFilter.PayrollPayDate]], row [offCycleFilterColumns [OffCycleFilter.PeriodEndDate]]}, (row1, row2) => new {row1.DateTimeValue, row2.DateTimeValue}) .Where (row => !payCycles.ContainsKey (row.payCycleName)) .SelectMany (row => new[] {row.payDate, row.endDate}, (row1, row2) => new {row1, row2}) .Where (pair => !rows.ContainsKey ((pair.row1, pair.row2))) .SelectMany (pair => new[] {pair.row1, pair.row2}, (pair1, pair2) => new {pair1.i, pair2.i}) .ToList ();
+public enum PayCycle
+{
+    Monthly,
+    SemiMonthly,
+    Weekly
+}
