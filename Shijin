@@ -21,3 +21,7 @@ for (int i = 1; i <= worksheet.Cells.MaxDataRow; i++)
 
     rows[(payDate, endDate, payCycle)].Add(i);
 }
+
+
+
+var result = worksheet .SelectMany (row => new[] {row [offCycleFilterColumns [OffCycleFilter.PayrollPayDate]], row [offCycleFilterColumns [OffCycleFilter.PeriodEndDate]]}, (row1, row2) => new {row1.DateTimeValue, row2.DateTimeValue}) .Where (row => !payCycles.ContainsKey (row.payCycleName)) .SelectMany (row => new[] {row.payDate, row.endDate}, (row1, row2) => new {row1, row2}) .Where (pair => !rows.ContainsKey ((pair.row1, pair.row2))) .SelectMany (pair => new[] {pair.row1, pair.row2}, (pair1, pair2) => new {pair1.i, pair2.i}) .ToList ();
