@@ -58,3 +58,38 @@ public enum PayCycle
     SemiMonthly,
     Weekly
 }
+
+
+Dictionary<(DateTime, DateTime, PayCycle), List<int>> rows = new();
+
+// Get pay cycle values from database
+Dictionary<string, PayCycle> payCycles = new()
+{
+    { "Monthly".Trim().ToUpper(), PayCycle.Monthly },
+    { "SemiMonthly".Trim().ToUpper(), PayCycle.SemiMonthly },
+    { "EL Semi-Monthly".Trim().ToUpper(), PayCycle.SemiMonthly },
+    { "PR Semi-Monthly".Trim().ToUpper(), PayCycle.SemiMonthly },
+    { "Weekly".Trim().ToUpper(), PayCycle.Weekly },
+    { "Aveda Weekly".Trim().ToUpper(), PayCycle.Weekly },
+    { "EL Weekly".Trim().ToUpper(), PayCycle.Weekly },
+    { "Northtec Weekly".Trim().ToUpper(), PayCycle.Weekly },
+    { "PR Weekly".Trim().ToUpper(), PayCycle.Weekly }
+};
+
+// Use LINQ to query the worksheet and group the rows by the tuple key
+var query = from i in Enumerable.Range(1, worksheet.Cells.MaxDataRow)
+            let payDate = worksheet.Cells[i, offCycleFilterColumns[OffCycleFilter.PayrollPayDate]].DateTimeValue
+            let endDate = offCycleFilterColumns.ContainsKey(OffCycleFilter.PeriodEndDate) ?
+                          worksheet.Cells[i, offCycleFilterColumns[OffCycleFilter.PeriodEndDate]].DateTimeValue :
+                          worksheet.Cells[i, offCycleFilterColumns[OffCycleFilter.ProcessEndDate]].DateTimeValue
+            let payCycleName = worksheet.Cells[i, offCycleFilterColumns[OffCycleFilter.PayCycle]].StringValue.Trim().ToUpper()
+            where payCycles.ContainsKey(payCycleName)
+            let payCycle = payCycles[payCycleName]
+            group i by (payDate, endDate, payCycle) into g
+            select g;
+
+// Convert the query result into a dictionary
+rows = query.ToDictionary(g => g.Key, g => g.ToList());
+
+return rows;
+
