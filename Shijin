@@ -37,8 +37,3 @@ Dictionary<string, PayCycle> payCycles = new();
      return default;
  }
 
-Dictionary<string, PayCycle> payCycles = dt.Rows.Cast<DataRow>()
-    .SelectMany(dr => dr[1].ToString().ToUpper().Split(';'), (dr, value) => new { dr, value })
-    .Where(x => !payCycles.ContainsKey(x.value))
-    .ToDictionary(x => x.value, x => (PayCycle)x.dr[0]);
-
