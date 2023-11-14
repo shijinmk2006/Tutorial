@@ -34,3 +34,12 @@ public enum OffCycleFilter
     ProcessEndDate,
     PayCycle
 }
+
+
+// Use linq to query the worksheet cells and get the matching column indices
+return worksheet.Cells[0, 0, 0, worksheet.Cells.MaxDataColumn]
+    .Where(c => !string.IsNullOrWhiteSpace(c.StringValue))
+    .Select(c => new { Header = c.StringValue.Trim().ToUpper(), Column = c.Column })
+    .Join(offCycleFilterColumnNames, c => c.Header, kvp => kvp.Key, (c, kvp) => new { OffCycleFilter = kvp.Value, Column = c.Column })
+    .ToDictionary(x => x.OffCycleFilter, x => x.Column);
+
