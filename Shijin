@@ -36,3 +36,42 @@
      [Description("Semi-Monthly")]
      SemiMonthly = 4
  }
+
+
+To improve the code, you could consider the following:
+
+1. **Use LINQ for Conciseness:**
+   Utilize LINQ to simplify the code, making it more concise and readable.
+
+2. **Avoid Duplicate Code:**
+   Combine common functionalities to avoid redundancy.
+
+Here's a refactored version incorporating these suggestions:
+
+```csharp
+DataTable dt = new DataTable();
+Dictionary<string, PayCycle> payCycles = dt.Rows
+    .Cast<DataRow>()
+    .SelectMany(dr => dr["Text"].ToString().ToUpper().Split(';'),
+                (dr, value) => (Value: value, PayCycle: (PayCycle)dr[""]))
+    .ToDictionary(pair => pair.Value, pair => pair.PayCycle);
+
+Enum.GetValues(typeof(PayCycle))
+    .Cast<PayCycle>()
+    .Select(paycycle => (Value: GetEnumDescription(paycycle).ToString().ToUpper(), PayCycle: paycycle))
+    .Where(pair => !payCycles.ContainsKey(pair.Value))
+    .ToList()
+    .ForEach(pair => payCycles.Add(pair.Value, pair.PayCycle));
+
+string GetEnumDescription(PayCycle enumValue)
+{
+    var field = enumValue.GetType().GetField(enumValue.ToString());
+    if (Attribute.GetCustomAttribute(field, typeof(DescriptionAttribute)) is DescriptionAttribute attribute)
+    {
+        return attribute.Description;
+    }
+    return default;
+}
+```
+
+This refactoring uses LINQ to streamline the processing of DataTable rows and enum values, making the code more succinct and eliminating redundancy.
