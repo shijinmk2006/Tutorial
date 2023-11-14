@@ -1,1 +1,31 @@
 
+Certainly! Here's another alternative approach using LINQ and `ToLookup` for grouping:
+
+```csharp
+var payCycles = dt.Rows
+    .Cast<DataRow>()
+    .SelectMany(dr => dr[1].ToString().ToUpper().Split(';'), (dr, value) => (Value: value.ToUpper(), Cycle: (PayCycle)dr[0]))
+    .ToLookup(item => item.Value, item => item.Cycle);
+
+var existingValues = payCycles.SelectMany(group => group.Select(item => item.Value));
+var missingCycles = Enum.GetValues(typeof(PayCycle))
+    .Cast<PayCycle>()
+    .Where(s => !existingValues.Contains(GetEnumDescription(s).ToUpper()))
+    .ToDictionary(value => value.ToString().ToUpper(), GetEnumDescription);
+
+payCycles = payCycles.SelectMany(group => group.Concat(missingCycles.Where(mc => group.All(item => item.Value != mc.Key))))
+                   .ToLookup(item => item.Value, item => item.Cycle)
+                   .ToDictionary(group => group.Key, group => group.First());
+
+string GetEnumDescription(PayCycle enumValue)
+{
+    var field = enumValue.GetType().GetField(enumValue.ToString());
+    if (Attribute.GetCustomAttribute(field, typeof(DescriptionAttribute)) is DescriptionAttribute attribute)
+    {
+        return attribute.Description;
+    }
+    return default;
+}
+```
+
+In this version, I'm using `ToLookup` to group the values by their uppercase representation. Then, I concatenate the missing values for each group and convert the result back to a dictionary.
