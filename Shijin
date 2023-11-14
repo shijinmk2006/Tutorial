@@ -1,27 +1,38 @@
 
- public enum PayCycle
- {
-     Weekly = 1,
-     BiWeekly = 2,
-     Monthly = 3,
-     SemiMonthly = 4
- }
-Dictionary<string, PayCycle> payCycles = new();
-foreach (DataRow dr in dt.Rows)
+public enum PayCycle
 {
-    string[] splitValues = dr[1].ToString().ToUpper().Split(';');
-    foreach (string value in splitValues)
-    {
-        if (!payCycles.ContainsKey(value))
-            payCycles.Add(value, (PayCycle)dr[0]);
-    }
+    [Description("Weekly")]
+    Weekly = 1,
+    [Description("BiWeekly")]
+    BiWeekly = 2,
+    [Description("Monthly")]
+    Monthly = 3,
+    [Description("Semi-Monthly")]
+    SemiMonthly = 4
 }
+Dictionary<string, PayCycle> payCycles = new();
+ foreach (DataRow dr in dt.Rows)
+ {
+     string[] splitValues = dr[1].ToString().ToUpper().Split(';');
+     foreach (string value in splitValues)
+     {
+         if (!payCycles.ContainsKey(value))
+             payCycles.Add(value, (PayCycle)dr[0]);
+     }
+ }
+ foreach (PayCycle s in Enum.GetValues(typeof(PayCycle)))
+ {
+     string value = GetEnumDescription(s).ToString().ToUpper();
+     if (!payCycles.ContainsKey(value))
+         payCycles.Add(value, s);
+ }
 
-
-Dictionary<string, PayCycle> payCycles = dt.Rows.Cast<DataRow>()
-    .SelectMany(dr => dr[1].ToString().ToUpper().Split(';'), (dr, value) => new { dr, value })
-    .Where(x => !payCycles.ContainsKey(x.value))
-    .ToDictionary(x => x.value, x => (PayCycle)x.dr[0]);
-
-
-
+ string GetEnumDescription(PayCycle enumValue)
+ {
+     var field = enumValue.GetType().GetField(enumValue.ToString());
+     if (Attribute.GetCustomAttribute(field, typeof(DescriptionAttribute)) is DescriptionAttribute attribute)
+     {
+         return attribute.Description;
+     }
+     return default;
+ }
