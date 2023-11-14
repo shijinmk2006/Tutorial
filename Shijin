@@ -1,86 +1,18 @@
-Dictionary<OffCycleFilter, int> GetOffCycleFilterColumns(Worksheet worksheet)
+
+ public enum PayCycle
+ {
+     Weekly = 1,
+     BiWeekly = 2,
+     Monthly = 3,
+     SemiMonthly = 4
+ }
+Dictionary<string, PayCycle> payCycles = new();
+foreach (DataRow dr in dt.Rows)
 {
-    // Get off cycle filter columns from database
-    Dictionary<string, OffCycleFilter> offCycleFilterColumnNames = new()
+    string[] splitValues = dr[1].ToString().ToUpper().Split(';');
+    foreach (string value in splitValues)
     {
-        { "Payment Date".Trim().ToUpper(), OffCycleFilter.PayrollPayDate },
-        { "Run Date".Trim().ToUpper(), OffCycleFilter.PeriodEndDate },
-        { "Consolidation Set".Trim().ToUpper(), OffCycleFilter.PayCycle }
-    };
-
-    Dictionary<OffCycleFilter, int> offCycleFilterColumns = new();
-
-    for (int i = 0; i <= worksheet.Cells.MaxDataColumn; i++)
-    {
-        if (offCycleFilterColumns.Count == offCycleFilterColumnNames.Count)
-            break;
-
-        string header = worksheet.Cells[0, i].StringValue.Trim().ToUpper();
-
-        if (string.IsNullOrWhiteSpace(header))
-            continue;
-
-        if (offCycleFilterColumnNames.TryGetValue(header, out OffCycleFilter offCycleFilter) &&
-            !offCycleFilterColumns.ContainsKey(offCycleFilter))
-            offCycleFilterColumns.Add(offCycleFilter, i);
+        if (!payCycles.ContainsKey(value))
+            payCycles.Add(value, (PayCycle)dr[0]);
     }
-
-    return offCycleFilterColumns;
 }
-public enum OffCycleFilter
-{
-    PayrollPayDate,
-    PeriodEndDate,
-    ProcessEndDate,
-    PayCycle
-}
-
-
-// Use linq to query the worksheet cells and get the matching column indices
-return worksheet.Cells[0, 0, 0, worksheet.Cells.MaxDataColumn]
-    .Where(c => !string.IsNullOrWhiteSpace(c.StringValue))
-    .Select(c => new { Header = c.StringValue.Trim().ToUpper(), Column = c.Column })
-    .Join(offCycleFilterColumnNames, c => c.Header, kvp => kvp.Key, (c, kvp) => new { OffCycleFilter = kvp.Value, Column = c.Column })
-    .ToDictionary(x => x.OffCycleFilter, x => x.Column);
-
-
-
-public static Dictionary<OffCycleFilter, int> GetOffCycleFilterColumnsLinqRefactored(Worksheet worksheet)
-{
-    // Get the off cycle filter column names.
-    var offCycleFilterColumnNames = new Dictionary<string, OffCycleFilter>
-    {
-        { "Payment Date".Trim().ToUpper(), OffCycleFilter.PayrollPayDate },
-        { "Run Date".Trim().ToUpper(), OffCycleFilter.PeriodEndDate },
-        { "Consolidation Set".Trim().ToUpper(), OffCycleFilter.PayCycle }
-    };
-
-    // Get the off cycle filter columns from the worksheet.
-    return worksheet.Cells
-        .Where(cell => !string.IsNullOrWhiteSpace(cell.StringValue))
-        .Select(cell => cell.StringValue.Trim().ToUpper())
-        .Where(header => offCycleFilterColumnNames.ContainsKey(header))
-        .Distinct()
-        .ToDictionary(header => offCycleFilterColumnNames[header], header => worksheet.Cells[0, worksheet.Cells.MaxDataColumn].GetColumnIndexByName(header));
-}
-public static Dictionary<OffCycleFilter, int> GetOffCycleFilterColumnsLinqRefactoredAlternate(Worksheet worksheet)
-{
-    // Get the off cycle filter column names.
-    var offCycleFilterColumnNames = new Dictionary<string, OffCycleFilter>
-    {
-        { "Payment Date".Trim().ToUpper(), OffCycleFilter.PayrollPayDate },
-        { "Run Date".Trim().ToUpper(), OffCycleFilter.PeriodEndDate },
-        { "Consolidation Set".Trim().ToUpper(), OffCycleFilter.PayCycle }
-    };
-
-    // Get the off cycle filter columns from the worksheet.
-    return worksheet.Cells
-        .Where(cell => !string.IsNullOrWhiteSpace(cell.StringValue))
-        .Select(cell => cell.StringValue.Trim().ToUpper())
-        .Intersect(offCycleFilterColumnNames.Keys)
-        .Distinct()
-        .Select(header => new KeyValuePair<OffCycleFilter, int>(offCycleFilterColumnNames[header], worksheet.Cells[0, worksheet.Cells.MaxDataColumn].GetColumnIndexByName(header)))
-        .ToDictionary(pair => pair.Key, pair => pair.Value);
-}
-
-
