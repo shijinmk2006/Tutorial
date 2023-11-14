@@ -63,5 +63,24 @@ public static Dictionary<OffCycleFilter, int> GetOffCycleFilterColumnsLinqRefact
         .Distinct()
         .ToDictionary(header => offCycleFilterColumnNames[header], header => worksheet.Cells[0, worksheet.Cells.MaxDataColumn].GetColumnIndexByName(header));
 }
+public static Dictionary<OffCycleFilter, int> GetOffCycleFilterColumnsLinqRefactoredAlternate(Worksheet worksheet)
+{
+    // Get the off cycle filter column names.
+    var offCycleFilterColumnNames = new Dictionary<string, OffCycleFilter>
+    {
+        { "Payment Date".Trim().ToUpper(), OffCycleFilter.PayrollPayDate },
+        { "Run Date".Trim().ToUpper(), OffCycleFilter.PeriodEndDate },
+        { "Consolidation Set".Trim().ToUpper(), OffCycleFilter.PayCycle }
+    };
+
+    // Get the off cycle filter columns from the worksheet.
+    return worksheet.Cells
+        .Where(cell => !string.IsNullOrWhiteSpace(cell.StringValue))
+        .Select(cell => cell.StringValue.Trim().ToUpper())
+        .Intersect(offCycleFilterColumnNames.Keys)
+        .Distinct()
+        .Select(header => new KeyValuePair<OffCycleFilter, int>(offCycleFilterColumnNames[header], worksheet.Cells[0, worksheet.Cells.MaxDataColumn].GetColumnIndexByName(header)))
+        .ToDictionary(pair => pair.Key, pair => pair.Value);
+}
 
 
