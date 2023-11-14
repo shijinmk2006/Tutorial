@@ -43,3 +43,25 @@ return worksheet.Cells[0, 0, 0, worksheet.Cells.MaxDataColumn]
     .Join(offCycleFilterColumnNames, c => c.Header, kvp => kvp.Key, (c, kvp) => new { OffCycleFilter = kvp.Value, Column = c.Column })
     .ToDictionary(x => x.OffCycleFilter, x => x.Column);
 
+
+
+public static Dictionary<OffCycleFilter, int> GetOffCycleFilterColumnsLinqRefactored(Worksheet worksheet)
+{
+    // Get the off cycle filter column names.
+    var offCycleFilterColumnNames = new Dictionary<string, OffCycleFilter>
+    {
+        { "Payment Date".Trim().ToUpper(), OffCycleFilter.PayrollPayDate },
+        { "Run Date".Trim().ToUpper(), OffCycleFilter.PeriodEndDate },
+        { "Consolidation Set".Trim().ToUpper(), OffCycleFilter.PayCycle }
+    };
+
+    // Get the off cycle filter columns from the worksheet.
+    return worksheet.Cells
+        .Where(cell => !string.IsNullOrWhiteSpace(cell.StringValue))
+        .Select(cell => cell.StringValue.Trim().ToUpper())
+        .Where(header => offCycleFilterColumnNames.ContainsKey(header))
+        .Distinct()
+        .ToDictionary(header => offCycleFilterColumnNames[header], header => worksheet.Cells[0, worksheet.Cells.MaxDataColumn].GetColumnIndexByName(header));
+}
+
+
