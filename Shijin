@@ -16,3 +16,9 @@ foreach (DataRow dr in dt.Rows)
             payCycles.Add(value, (PayCycle)dr[0]);
     }
 }
+public Dictionary<string, PayCycle> GetPayCyclesFromDataRow(DataTable dt)
+{
+  return dt.Rows.Cast<DataRow>()
+    .Select(dr => new KeyValuePair<string, PayCycle>(dr[1].ToString().ToUpper(), (PayCycle)dr[0]))
+    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+}
