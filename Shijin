@@ -1,33 +1,38 @@
+ DataTable dt=new DataTable();
+ Dictionary<string, PayCycle> payCycles = new();
+ foreach (DataRow dr in dt.Rows)
+ {
+     string[] splitValues = dr["Text"].ToString().ToUpper().Split(';');
+     foreach (string value in splitValues)
+     {
+         if (!payCycles.ContainsKey(value))
+             payCycles.Add(value, (PayCycle)dr[""]);
+     }
+ }
+ foreach (PayCycle paycycle in Enum.GetValues(typeof(PayCycle)))
+ {
+     string value = GetEnumDescription(paycycle).ToString().ToUpper();
+     if (!payCycles.ContainsKey(value))
+         payCycles.Add(value, paycycle);
+ }
 
-Here's a refactored version of your code:
-
-```csharp
-Dictionary<string, PayCycle> payCycles = dt.Rows
-    .SelectMany(dr => dr["Text"].ToString().ToUpper().Split(';'),
-                (dr, value) => new { dr, value })
-    .Where(item => !payCycles.ContainsKey(item.value))
-    .ToDictionary(item => item.value, item => (PayCycle)item.dr["PayCycleNameId"]);
-
-Enum.GetValues(typeof(PayCycle))
-    .Cast<PayCycle>()
-    .Select(paycycle => new
-    {
-        value = GetEnumDescription(paycycle).ToString().ToUpper(),
-        paycycle
-    })
-    .Where(item => !payCycles.ContainsKey(item.value))
-    .ToList()
-    .ForEach(item => payCycles.Add(item.value, item.paycycle));
-
-string GetEnumDescription(PayCycle enumValue)
-{
-    var field = enumValue.GetType().GetField(enumValue.ToString());
-    if (Attribute.GetCustomAttribute(field, typeof(DescriptionAttribute)) is DescriptionAttribute attribute)
-    {
-        return attribute.Description;
-    }
-    return default;
-}
-```
-
-This version utilizes LINQ for a more concise and expressive style. It also combines some operations to reduce redundancy and improve readability.
+ string GetEnumDescription(PayCycle enumValue)
+ {
+     var field = enumValue.GetType().GetField(enumValue.ToString());
+     if (Attribute.GetCustomAttribute(field, typeof(DescriptionAttribute)) is DescriptionAttribute attribute)
+     {
+         return attribute.Description;
+     }
+     return default;
+ }
+  public enum PayCycle
+ {
+     [Description("Weekly")]
+     Weekly = 1,
+     [Description("BiWeekly")]
+     BiWeekly = 2,
+     [Description("Monthly")]
+     Monthly = 3,
+     [Description("Semi-Monthly")]
+     SemiMonthly = 4
+ }
