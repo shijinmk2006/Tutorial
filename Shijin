@@ -38,7 +38,44 @@ Dictionary<string, PayCycle> payCycles = new();
  }
 
 
+Certainly! You can refactor the code using LINQ to make it more concise. Here's a refactored version:
 
+```csharp
+var payCycles = dt.Rows
+    .Cast<DataRow>()
+    .SelectMany(dr => dr[1].ToString().ToUpper().Split(';'), (dr, value) => new { Value = value, Cycle = (PayCycle)dr[0] })
+    .ToDictionary(item => item.Value, item => item.Cycle);
+
+var existingValues = payCycles.Keys.Select(value => value.ToUpper());
+var missingCycles = Enum.GetValues(typeof(PayCycle))
+    .Cast<PayCycle>()
+    .Where(s => !existingValues.Contains(GetEnumDescription(s).ToUpper()));
+
+payCycles.AddMissingKeys(missingCycles, s => GetEnumDescription(s).ToUpper());
+
+void AddMissingKeys<TKey, TValue>(this Dictionary<TKey, TValue> dictionary, IEnumerable<TKey> keys, Func<TKey, TValue> valueSelector)
+{
+    foreach (var key in keys)
+    {
+        if (!dictionary.ContainsKey(key))
+        {
+            dictionary.Add(key, valueSelector(key));
+        }
+    }
+}
+
+string GetEnumDescription(PayCycle enumValue)
+{
+    var field = enumValue.GetType().GetField(enumValue.ToString());
+    if (Attribute.GetCustomAttribute(field, typeof(DescriptionAttribute)) is DescriptionAttribute attribute)
+    {
+        return attribute.Description;
+    }
+    return default;
+}
+```
+
+This refactoring uses LINQ for both populating the dictionary and finding missing values, making the code more concise and readable. Note the addition of the `AddMissingKeys` extension method to handle adding missing keys to the dictionary.
 
 
 
