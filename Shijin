@@ -37,3 +37,28 @@ Dictionary<string, PayCycle> payCycles = new();
      return default;
  }
 
+
+public enum PayCycle
+{
+  [Description("Weekly")]
+  Weekly = 1,
+  [Description("BiWeekly")]
+  BiWeekly = 2,
+  [Description("Monthly")]
+  Monthly = 3,
+  [Description("Semi-Monthly")]
+  SemiMonthly = 4
+}
+
+public Dictionary<string, PayCycle> GetPayCyclesFromDataRow(DataTable dt)
+{
+  var payCycles = dt.Rows.Cast<DataRow>()
+    .SelectMany(dr => dr[1].ToString().ToUpper().Split(';'))
+    .Distinct()
+    .Union(Enum.GetNames(typeof(PayCycle)).Select(s => s.ToUpper()))
+    .ToDictionary(k => k, k => (PayCycle)Enum.Parse(typeof(PayCycle), k));
+
+  return payCycles;
+}
+
+
