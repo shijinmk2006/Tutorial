@@ -1,1 +1,33 @@
 
+Here's a refactored version of your code:
+
+```csharp
+Dictionary<string, PayCycle> payCycles = dt.Rows
+    .SelectMany(dr => dr["Text"].ToString().ToUpper().Split(';'),
+                (dr, value) => new { dr, value })
+    .Where(item => !payCycles.ContainsKey(item.value))
+    .ToDictionary(item => item.value, item => (PayCycle)item.dr["PayCycleNameId"]);
+
+Enum.GetValues(typeof(PayCycle))
+    .Cast<PayCycle>()
+    .Select(paycycle => new
+    {
+        value = GetEnumDescription(paycycle).ToString().ToUpper(),
+        paycycle
+    })
+    .Where(item => !payCycles.ContainsKey(item.value))
+    .ToList()
+    .ForEach(item => payCycles.Add(item.value, item.paycycle));
+
+string GetEnumDescription(PayCycle enumValue)
+{
+    var field = enumValue.GetType().GetField(enumValue.ToString());
+    if (Attribute.GetCustomAttribute(field, typeof(DescriptionAttribute)) is DescriptionAttribute attribute)
+    {
+        return attribute.Description;
+    }
+    return default;
+}
+```
+
+This version utilizes LINQ for a more concise and expressive style. It also combines some operations to reduce redundancy and improve readability.
