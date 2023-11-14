@@ -1,1 +1,28 @@
 
+Certainly, here's another way to refactor the code using LINQ and some additional methods:
+
+```csharp
+var payCycles = dt.Rows
+    .Cast<DataRow>()
+    .SelectMany(dr => dr[1].ToString().ToUpper().Split(';'), (dr, value) => (Value: value, Cycle: (PayCycle)dr[0]))
+    .ToDictionary(item => item.Value, item => item.Cycle);
+
+var missingCycles = Enum.GetValues(typeof(PayCycle))
+    .Cast<PayCycle>()
+    .Except(payCycles.Keys.Select(key => key.ToUpper()), EqualityComparer<string>.Default)
+    .ToDictionary(value => value.ToUpper(), GetEnumDescription);
+
+payCycles = payCycles.Concat(missingCycles).ToDictionary(kv => kv.Key, kv => kv.Value);
+
+string GetEnumDescription(PayCycle enumValue)
+{
+    var field = enumValue.GetType().GetField(enumValue.ToString());
+    if (Attribute.GetCustomAttribute(field, typeof(DescriptionAttribute)) is DescriptionAttribute attribute)
+    {
+        return attribute.Description;
+    }
+    return default;
+}
+```
+
+In this version, I use the `Except` method to find missing values and create a dictionary for those missing values. Then, I use `Concat` to combine the existing and missing dictionaries into a new dictionary, effectively updating the `payCycles` dictionary with missing values.
