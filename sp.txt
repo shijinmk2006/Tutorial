@@ -1,0 +1,363 @@
+CREATE PROCEDURE [dbo].[usp_GetPayrollCalendarForFileUpload] @isOneTimeUpload BIT
+AS
+BEGIN
+	DECLARE @previousMonthdate DATE
+	DECLARE @previousMonth VARCHAR(10)
+		,@previusYear VARCHAR(4)
+	DECLARE @PayrollCalendarStatus TABLE (
+		STATUS VARCHAR(50)
+		,EntityId INT
+		);
+	DECLARE @DemographicStatus TABLE (
+		STATUS VARCHAR(50)
+		,EntityId INT
+		);
+
+	WITH PayrollCalendarStatus
+	AS (
+		SELECT FQ.fkFileUploadStatus AS STATUS
+			,PCM.fkEntity AS EntityId
+		FROM PayrollCalendarMaster PCM
+		JOIN PayrollCalendar PC ON PC.fkPayrollCalendarMaster = PCM.pkPayrollCalendarMaster
+		LEFT JOIN FileQueue FQ ON FQ.fkPayrollCalendar = PC.pkPayrollCalendar
+		GROUP BY FQ.fkFileUploadStatus
+			,PCM.fkEntity
+		)
+	INSERT INTO @PayrollCalendarStatus
+	SELECT STATUS
+		,EntityId
+	FROM PayrollCalendarStatus;
+
+	WITH DemographicStatus
+	AS (
+		SELECT FQM.fkFileUploadStatus AS STATUS
+			,PCM.fkEntity AS EntityId
+		FROM PayrollCalendarMaster PCM
+		JOIN PayrollCalendar PC ON PCM.fkEntity = PC.fkEntity
+		JOIN FileQueueMaster FQM ON FQM.fkPayrollCalendarMaster = PCM.pkPayrollCalendarMaster
+		WHERE FQM.fkTemplate = 2
+		GROUP BY FQM.fkFileUploadStatus
+			,PCM.fkEntity
+		)
+	INSERT INTO @DemographicStatus
+	SELECT STATUS
+		,EntityId
+	FROM DemographicStatus;
+
+	SET @previousMonthdate = DATEADD(MONTH, DATEDIFF(MONTH, 0, GETUTCDATE()) - 1, 0)
+	SET @previousMonth = LEFT(DATENAME(MONTH, @previousMonthdate), 10)
+	SET @previusYear = LEFT(DATENAME(YEAR, @previousMonthdate), 10)
+
+	IF (@isOneTimeUpload = 1)
+	BEGIN
+		DECLARE @MonthsList TABLE (Name VARCHAR(50))
+		DECLARE @start DATE = DATEADD(yy, DATEDIFF(yy, 0, GETDATE()), 0)
+		DECLARE @end DATE = getdate();
+
+		WITH months (DATE)
+		AS (
+			SELECT @start
+			
+			UNION ALL
+			
+			SELECT DATEADD(month, 1, DATE)
+			FROM months
+			WHERE DATEADD(month, 1, DATE) <= @end
+			)
+		INSERT INTO @MonthsList
+		SELECT Datename(month, DATE)
+		FROM months
+
+		SELECT E.pkEntity
+			,E.EntityName
+			,E.FedId
+			,C.Country
+			,R.Region
+			,PC.Year
+			,PC.Month
+			,PG.PayGroup
+			,CASE 
+				WHEN (
+						Count(CASE 
+								WHEN tc.fkEntityId IN (E.pkEntity)
+									AND tc.fkTemplateId = 1
+									THEN 1
+								ELSE NULL
+								END)
+						) > 0
+					THEN Cast(1 AS BIT)
+				ELSE Cast(0 AS BIT)
+				END AS PayRollRegisterUploaded
+			,CASE 
+				WHEN (
+						Count(CASE 
+								WHEN tc.fkEntityId IN (E.pkEntity)
+									AND tc.fkTemplateId = 2
+									THEN 1
+								ELSE NULL
+								END)
+						) > 0
+					THEN Cast(1 AS BIT)
+				ELSE Cast(0 AS BIT)
+				END AS DemographicUploaded
+			,E.fkFileType
+			,E.IsSplitAllowed
+			,CASE 
+				WHEN (
+						(
+							SELECT TOP 1 'Error'
+							FROM @PayrollCalendarStatus s
+							WHERE s.EntityId IN (E.pkEntity)
+								AND s.STATUS IN (
+									3
+									,6
+									)
+							) = 'Error'
+						)
+					THEN 'Error'
+				WHEN (
+						(
+							SELECT TOP 1 'In Progress'
+							FROM @PayrollCalendarStatus s
+							WHERE s.EntityId IN (E.pkEntity)
+								AND s.STATUS IN (
+									1
+									,2
+									,4
+									,10
+									)
+							) = 'In Progress'
+						)
+					THEN 'In Progress'
+				WHEN (
+						(
+							SELECT TOP 1 'Completed'
+							FROM @PayrollCalendarStatus s
+							WHERE s.EntityId IN (E.pkEntity)
+								AND s.STATUS IN (
+									5
+									,11
+									,12
+									)
+							) = 'Completed'
+						)
+					THEN 'Completed'
+				ELSE ''
+				END AS PayrollRegisterStatus
+			,CASE 
+				WHEN (
+						(
+							SELECT TOP 1 'Error'
+							FROM @DemographicStatus ds
+							WHERE ds.EntityId IN (E.pkEntity)
+								AND ds.STATUS IN (
+									3
+									,6
+									)
+							) = 'Error'
+						)
+					THEN 'Error'
+				WHEN (
+						(
+							SELECT TOP 1 'In Progress'
+							FROM @DemographicStatus ds
+							WHERE ds.EntityId IN (E.pkEntity)
+								AND ds.STATUS IN (
+									1
+									,2
+									,4
+									,10
+									)
+							) = 'In Progress'
+						)
+					THEN 'In Progress'
+				WHEN (
+						(
+							SELECT TOP 1 'Completed'
+							FROM @DemographicStatus ds
+							WHERE ds.EntityId IN (E.pkEntity)
+								AND ds.STATUS IN (
+									5
+									,11
+									,12
+									)
+							) = 'Completed'
+						)
+					THEN 'Completed'
+				ELSE ''
+				END AS DemographicStatus
+		FROM PayrollCalendar PC
+		INNER JOIN Entity E ON PC.fkEntity = E.pkEntity
+		INNER JOIN Currency CU ON CU.pkCurrency = PC.fkCurrency
+		INNER JOIN Country C ON E.fkCountry = C.pkCountry
+		INNER JOIN Region R ON E.fkRegion = R.pkRegion
+		INNER JOIN PayGroup PG ON E.fkPayGroup = PG.pkPayGroup
+		LEFT JOIN TemplateClientTemplateMapping tc ON tc.fkEntityId = E.pkEntity
+		WHERE (
+				(
+					[Year] = LEFT(DATENAME(YEAR, GETUTCDATE()), 10)
+					AND [Month] IN (
+						SELECT Name
+						FROM @MonthsList
+						)
+					)
+				OR [YEAR] < LEFT(DATENAME(YEAR, GETUTCDATE()), 10)
+				)
+		GROUP BY E.pkEntity
+			,E.EntityName
+			,E.FedId
+			,C.Country
+			,R.Region
+			,PC.Year
+			,PC.Month
+			,PG.PayGroup
+			,E.fkFileType
+			,E.IsSplitAllowed
+	END
+	ELSE
+	BEGIN
+		SELECT E.pkEntity
+			,E.EntityName
+			,E.FedId
+			,C.Country
+			,R.Region
+			,PC.Year
+			,PC.Month
+			,PG.PayGroup
+			,CASE 
+				WHEN (
+						Count(CASE 
+								WHEN tc.fkEntityId IN (E.pkEntity)
+									AND tc.fkTemplateId = 1
+									THEN 1
+								ELSE NULL
+								END)
+						) > 0
+					THEN Cast(1 AS BIT)
+				ELSE Cast(0 AS BIT)
+				END AS PayRollRegisterUploaded
+			,CASE 
+				WHEN (
+						Count(CASE 
+								WHEN tc.fkEntityId IN (E.pkEntity)
+									AND tc.fkTemplateId = 2
+									THEN 1
+								ELSE NULL
+								END)
+						) > 0
+					THEN Cast(1 AS BIT)
+				ELSE Cast(0 AS BIT)
+				END AS DemographicUploaded
+			,E.fkFileType
+			,E.IsSplitAllowed
+			,CASE 
+				WHEN (
+						(
+							SELECT TOP 1 'Error'
+							FROM @PayrollCalendarStatus s
+							WHERE s.EntityId IN (E.pkEntity)
+								AND s.STATUS IN (
+									3
+									,6
+									)
+							) = 'Error'
+						)
+					THEN 'Error'
+				WHEN (
+						(
+							SELECT TOP 1 'In Progress'
+							FROM @PayrollCalendarStatus s
+							WHERE s.EntityId IN (E.pkEntity)
+								AND s.STATUS IN (
+									1
+									,2
+									,4
+									,10
+									)
+							) = 'In Progress'
+						)
+					THEN 'In Progress'
+				WHEN (
+						(
+							SELECT TOP 1 'Completed'
+							FROM @PayrollCalendarStatus s
+							WHERE s.EntityId IN (E.pkEntity)
+								AND s.STATUS IN (
+									5
+									,11
+									,12
+									)
+							) = 'Completed'
+						)
+					THEN 'Completed'
+				ELSE ''
+				END AS PayrollRegisterStatus
+			,CASE 
+				WHEN (
+						(
+							SELECT TOP 1 'Error'
+							FROM @DemographicStatus ds
+							WHERE ds.EntityId IN (E.pkEntity)
+								AND ds.STATUS IN (
+									3
+									,6
+									)
+							) = 'Error'
+						)
+					THEN 'Error'
+				WHEN (
+						(
+							SELECT TOP 1 'In Progress'
+							FROM @DemographicStatus ds
+							WHERE ds.EntityId IN (E.pkEntity)
+								AND ds.STATUS IN (
+									1
+									,2
+									,4
+									,10
+									)
+							) = 'In Progress'
+						)
+					THEN 'In Progress'
+				WHEN (
+						(
+							SELECT TOP 1 'Completed'
+							FROM @DemographicStatus ds
+							WHERE ds.EntityId IN (E.pkEntity)
+								AND ds.STATUS IN (
+									5
+									,11
+									,12
+									)
+							) = 'Completed'
+						)
+					THEN 'Completed'
+				ELSE ''
+				END AS DemographicStatus
+		FROM PayrollCalendar PC
+		INNER JOIN Entity E ON PC.fkEntity = E.pkEntity
+		INNER JOIN Currency CU ON CU.pkCurrency = PC.fkCurrency
+		INNER JOIN Country C ON E.fkCountry = C.pkCountry
+		INNER JOIN Region R ON E.fkRegion = R.pkRegion
+		INNER JOIN PayGroup PG ON E.fkPayGroup = PG.pkPayGroup
+		LEFT JOIN TemplateClientTemplateMapping tc ON tc.fkEntityId = E.pkEntity
+		WHERE (
+				[Month] = LEFT(DATENAME(MONTH, GETUTCDATE()), 10)
+				AND [Year] = LEFT(DATENAME(YEAR, GETUTCDATE()), 10)
+				)
+			OR (
+				[Month] = @previousMonth
+				AND [Year] = @previusYear
+				)
+		GROUP BY E.pkEntity
+			,E.EntityName
+			,E.FedId
+			,C.Country
+			,R.Region
+			,PC.Year
+			,PC.Month
+			,PG.PayGroup
+			,E.fkFileType
+			,E.IsSplitAllowed
+	END
+END
