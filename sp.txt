@@ -1,3 +1,26 @@
+public class FileValidationQueueData
+{
+    public int ClientId { get; set; }
+    public int FileQueueMasterId { get; set; }
+    public string UserName { get; set; }
+}
+ public class ModifiedColumns
+ {
+     public byte[] ProcessedFile { get; set; }
+     public string[] IdentifierId { get; set; }
+     public string PivotId { get; set; }
+     public string ValueId { get; set; }
+     public string Error { get; set; }
+ }
+ public class wrapper
+ {
+     public string location { get; set; }
+     public PayViewSharedLogics.Model.ModifiedColumns modifiedColumns { get; set; }
+     public List<string> excelColumn { get; set; }
+
+     public FileValidationQueueData fileValidationQueueData { get; set; }
+ }
+
 public async Task<bool> PivotFile(WrapperModel wrapper)
 {
     int clientid = wrapper.fileValidationQueueData.ClientId;
