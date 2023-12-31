@@ -1,1 +1,79 @@
 
+Certainly! Here's an alternate version with further simplifications:
+
+```csharp
+public class FileValidationQueueData
+{
+    public int ClientId { get; set; }
+    public int FileQueueMasterId { get; set; }
+    public string UserName { get; set; }
+}
+
+public class ModifiedColumns
+{
+    public byte[] ProcessedFile { get; set; }
+    public string[] IdentifierId { get; set; }
+    public string PivotId { get; set; }
+    public string ValueId { get; set; }
+    public string Error { get; set; }
+}
+
+public class Wrapper
+{
+    public string Location { get; set; }
+    public ModifiedColumns ModifiedColumns { get; set; }
+    public List<string> ExcelColumn { get; set; }
+    public FileValidationQueueData FileValidationQueueData { get; set; }
+}
+
+public async Task<bool> PivotFile(Wrapper wrapper)
+{
+    try
+    {
+        int clientId = wrapper.FileValidationQueueData.ClientId;
+        SaveData($"Invoked the post method from {wrapper.Location}", clientId);
+
+        byte[] file = await azureBlobStorageHelper.FileDownloadFromBlob(wrapper.Location);
+        using (MemoryStream stream = new(file))
+        {
+            Workbook workbook = new Workbook(stream, new LoadOptions { MemorySetting = MemorySetting.MemoryPreference });
+            Worksheet pivotSheet = CreateAndPopulatePivotTable(workbook, wrapper);
+            TransformAndSaveData(workbook, pivotSheet, clientId, wrapper.Location);
+        }
+
+        return true;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error in PivotFile: {ex.Message}");
+        return false;
+    }
+}
+
+private Worksheet CreateAndPopulatePivotTable(Workbook workbook, Wrapper wrapper)
+{
+    Worksheet worksheet = workbook.Worksheets.First();
+    worksheet.Cells.MemorySetting = MemorySetting.MemoryPreference;
+
+    // ... existing code for creating and populating pivot table ...
+
+    return workbook.Worksheets["ConvertedSheet"];
+}
+
+private void TransformAndSaveData(Workbook workbook, Worksheet pivotSheet, int clientId, string originalLocation)
+{
+    // ... existing code for transforming and saving data ...
+
+    // Example: handle error if needed
+    // if (result.Item1)
+    // {
+    //     Console.WriteLine($"File upload successful: {result.Item2}");
+    // }
+    // else
+    // {
+    //     Console.WriteLine($"File upload failed: {result.Item2}");
+    // }
+}
+```
+
+This version further removes unnecessary assignments and retains the core structure of your original code. Feel free to adjust it based on your specific requirements and coding style preferences.
