@@ -1,110 +1,653 @@
-public class FileValidationQueueData
-{
-    public int ClientId { get; set; }
-    public int FileQueueMasterId { get; set; }
-    public string UserName { get; set; }
-}
- public class ModifiedColumns
- {
-     public byte[] ProcessedFile { get; set; }
-     public string[] IdentifierId { get; set; }
-     public string PivotId { get; set; }
-     public string ValueId { get; set; }
-     public string Error { get; set; }
- }
- public class wrapper
- {
-     public string location { get; set; }
-     public PayViewSharedLogics.Model.ModifiedColumns modifiedColumns { get; set; }
-     public List<string> excelColumn { get; set; }
-
-     public FileValidationQueueData fileValidationQueueData { get; set; }
- }
-
-public async Task<bool> PivotFile(WrapperModel wrapper)
-{
-    int clientid = wrapper.fileValidationQueueData.ClientId;
-    SaveData($"invoked the post method from {wrapper.location}", clientid);
-    string blobLocation = string.Empty;
-    byte[] file = await azureBlobStorageHelper.FileDownloadFromBlob(wrapper.location);
-    LoadOptions opt = new LoadOptions();
-    opt.MemorySetting = MemorySetting.MemoryPreference;
-    using (MemoryStream stream = new(file))
-    {
-        Workbook workbook = new(stream, opt);
-        Worksheet worksheet = workbook.Worksheets.First();
-        Cells cells = worksheet.Cells;
-        cells.MemorySetting = (MemorySetting.MemoryPreference);
-        Worksheet ws = workbook.Worksheets[0];
-        ws.Cells.DeleteBlankColumns();
-        int maxdatacol = ws.Cells.MaxDataColumn;
-        int maxdatarow = ws.Cells.MaxDataRow;
-        String cellname = CellsHelper.CellIndexToName(maxdatarow, maxdatacol);
-        Worksheet sheet2 = workbook.Worksheets[workbook.Worksheets.Add()];
-        sheet2.Name = "ConvertedSheet";
-        Aspose.Cells.Pivot.PivotTableCollection pivotTables = sheet2.PivotTables;
-        int index = pivotTables.Add("=" + worksheet.Name + "!A1:" + cellname, "A1", "PivotTable1");
-        Aspose.Cells.Pivot.PivotTable pivotTable = pivotTables[index];
-        pivotTable.RowGrand = false;
-        pivotTable.ColumnGrand = false;
-        pivotTable.RowHeaderCaption = wrapper.excelColumn.Where(x => wrapper.modifiedColumns.IdentifierId[0].Trim().ToLower() == x.Trim().ToLower()).Select(x => x).FirstOrDefault();
-        pivotTable.ColumnHeaderCaption = wrapper.excelColumn.Where(x => wrapper.modifiedColumns.PivotId.Trim().ToLower() == x.Trim().ToLower()).Select(x => x).FirstOrDefault();
-
-        for (int i = 0; i < wrapper.modifiedColumns.IdentifierId.Count(); i++)
-        {
-            if (!String.IsNullOrEmpty(wrapper.modifiedColumns.IdentifierId[i]))
-            {
-                pivotTable.AddFieldToArea(Aspose.Cells.Pivot.PivotFieldType.Row, wrapper.excelColumn.Where(x => wrapper.modifiedColumns.IdentifierId[i].Trim().ToLower() == x.Trim().ToLower()).Select(x => x).FirstOrDefault());
-            }
-        }
-        pivotTable.AddFieldToArea(Aspose.Cells.Pivot.PivotFieldType.Column, wrapper.excelColumn.Where(x => wrapper.modifiedColumns.PivotId.Trim().ToLower() == x.Trim().ToLower()).Select(x => x).FirstOrDefault());
-        pivotTable.AddFieldToArea(Aspose.Cells.Pivot.PivotFieldType.Data, wrapper.excelColumn.Where(x => wrapper.modifiedColumns.ValueId.Trim().ToLower() == x.Trim().ToLower()).Select(x => x).FirstOrDefault());
-
-        for (int i = 0; i < pivotTable.RowFields.Count; i++)
-        {
-            pivotTable.RowFields[i].SetSubtotals(PivotFieldSubtotalType.Automatic, false);
-        }
-
-        Worksheet pivotsheet = workbook.Worksheets["ConvertedSheet"];
+CREATE TABLE [dbo].[Entity](
+	[pkEntity] [int] IDENTITY(1,1) NOT NULL,
+	[fkCountry] [int] NOT NULL,
+	[fkRegion] [int] NOT NULL,
+	[fkPayGroup] [int] NOT NULL,
+	[EntityName] [varchar](500) NOT NULL,
+	[FedId] [varchar](15) NOT NULL,
+	[fkFileType] [int] NOT NULL,
+	[IsMapped] [bit] NOT NULL,
+	[IsSplitAllowed] [bit] NOT NULL , 
+    CONSTRAINT [PK_Entity] PRIMARY KEY CLUSTERED 
+(
+	[pkEntity] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
 
 
-        pivotsheet.PivotTables[0].ShowDrill = false;
-        pivotsheet.PivotTables[0].RefreshData();
-        pivotsheet.PivotTables[0].CalculateData();
 
-        SaveData($"invoked ShowDrill the post method from {wrapper.location}", clientid);
+CREATE TABLE [dbo].[Currency] (
+    [pkCurrency] INT           NOT NULL,
+    [Currency]   VARCHAR (100) NOT NULL,
+    [CurrencyName] VARCHAR(100) NOT NULL, 
+    CONSTRAINT [PK_Currency] PRIMARY KEY CLUSTERED ([pkCurrency] ASC)
+);
 
-        Worksheet ws2 = workbook.Worksheets[1];
-        int maxdatacol2 = ws2.Cells.MaxDataColumn;
-        int maxdatarow2 = ws2.Cells.MaxDataRow;
-        String cellname2 = CellsHelper.CellIndexToName(maxdatarow2, maxdatacol2);
-        Worksheet srcSheet = workbook.Worksheets[1];
-        Aspose.Cells.Range sourceRange = srcSheet.Cells.CreateRange("A1:" + cellname2 + "");
-        Worksheet destSheet = workbook.Worksheets[workbook.Worksheets.Add()];
-        destSheet.Name = FileConstants.PayrollRegisterSheet;
-        Aspose.Cells.Range destRange = destSheet.Cells.CreateRange("A1:" + cellname2 + "");
-        destRange.Copy(sourceRange);
-        destSheet.Cells.DeleteRow(0);
-        workbook.Worksheets.RemoveAt(1);
-        SaveData($"invoked Save the post method from {wrapper.location}", clientid);
-        using (MemoryStream validatedStream = new())
-        {
-            workbook.Save(validatedStream, SaveFormat.Xlsx);
-            validatedStream.Seek(0, SeekOrigin.Begin);
-            byte[] validatedFile = new byte[validatedStream.Length];
-            validatedStream.Read(validatedFile, 0, validatedFile.Length);
-            if (validatedFile.Length > 0)
-            {
+CREATE TABLE [dbo].[Country](
+	[pkCountry] [int] IDENTITY(1,1) NOT NULL,
+	[Country] VARCHAR(50) NOT NULL,
+ CONSTRAINT [PK_Country] PRIMARY KEY CLUSTERED 
+(
+	[pkCountry] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+GO
 
-                StringBuilder blobname = new(Path.Combine("payrollregister", wrapper.fileValidationQueueData.ClientId.ToString(), Path.GetFileName(wrapper.location)));
-                Tuple<bool, string> retData = await azureBlobStorageHelper.BulkFileStreamUploadToBlobAsync(validatedFile, wrapper.fileValidationQueueData.ClientId, "payrollregister", Path.GetFileNameWithoutExtension(wrapper.location), Path.GetFileName(wrapper.location));
-                UpdateFileQueueMasterData(wrapper.fileValidationQueueData.ClientId, wrapper.fileValidationQueueData.FileQueueMasterId, (int)FileUploadStatus.InProgress, retData.Item2, wrapper.fileValidationQueueData.UserName);
-                await queueMessageService.SendMessage(wrapper.fileValidationQueueData, "horizontalfilequeue");
-            }
-        }
-    }
+CREATE TABLE [dbo].[Region](
+	[pkRegion] [int] IDENTITY(1,1) NOT NULL,
+	[Region] VARCHAR(50) NOT NULL,
+ CONSTRAINT [PK_Region] PRIMARY KEY CLUSTERED 
+(
+	[pkRegion] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+GO
 
-    SaveData($"invoked FileStreamUploadToBlob the post method from {blobLocation}", clientid);
+--ALTER TABLE [dbo].[Region] CHECK CONSTRAINT [FK_Region_Client]
+GO
 
-    return true;
-}
+CREATE TABLE [dbo].[PayGroup](
+	[pkPayGroup] [int] IDENTITY(1,1) NOT NULL,
+	[PayGroup] NVARCHAR(50) NOT NULL,
+ CONSTRAINT [PK_PayGroup] PRIMARY KEY CLUSTERED 
+(
+	[pkPayGroup] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+
+CREATE TABLE [dbo].[FileQueue]
+(
+	[pkFileQueue] INT IDENTITY(1,1) NOT NULL, 
+    [fkFileQueueMaster] INT NULL,
+    [fkPayrollCalendar] INT NOT NULL, 
+    [fkFileUploadStatus] INT NOT NULL, 
+    [Location] VARCHAR(500) NULL, 
+    [FileType] VARCHAR(20) NULL, 
+    [ActualFileName] VARCHAR(250) NULL, 
+    [UniqueFileName] VARCHAR(250) NULL, 
+    [CreatedBy] VARCHAR(100) NULL, 
+    [CreatedOn] DATETIME NULL, 
+    [UpdatedBy] VARCHAR(100) NULL, 
+    [UpdatedOn] DATETIME NULL,
+    SysStartTime datetime2 GENERATED ALWAYS AS ROW START NOT NULL,
+    SysEndTime datetime2 GENERATED ALWAYS AS ROW END NOT NULL,
+    [RecordCount] int  NULL ,
+    PERIOD FOR SYSTEM_TIME (SysStartTime,SysEndTime),
+    [IsMetricsUpdated] BIT NULL, 
+    CONSTRAINT [PK_FileQueue] PRIMARY KEY CLUSTERED 
+(
+	[pkFileQueue] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+)WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.FileQueueLog))
+
+
+
+CREATE TABLE [dbo].[FileQueueMaster]
+(
+	[pkFileQueueMaster] INT NOT NULL IDENTITY,
+    [fkPayrollCalendarMaster] INT NOT NULL,
+    [fkTemplate] INT NOT NULL,
+    [fkFileUploadStatus] INT NOT NULL,
+    [Location] VARCHAR(500) NOT NULL,
+    [ActualFileName] VARCHAR(250) NOT NULL, 
+    [UniqueFileName] VARCHAR(250) NOT NULL, 
+    [CreatedBy] VARCHAR(100) NULL, 
+    [CreatedOn] DATETIME NULL, 
+    [UpdatedBy] VARCHAR(100) NULL, 
+    [UpdatedOn] DATETIME NULL,
+    [SysStartTime] DATETIME2 GENERATED ALWAYS AS ROW START NOT NULL,
+    [SysEndTime] DATETIME2 GENERATED ALWAYS AS ROW END NOT NULL,
+    [RecordCount] int  NULL ,
+    PERIOD FOR SYSTEM_TIME ([SysStartTime], [SysEndTime]),
+    CONSTRAINT [PK_FileQueueMaster] PRIMARY KEY ([pkFileQueueMaster]),
+    CONSTRAINT [FK_FileQueueMaster_PayrollCalendarMaster] FOREIGN KEY ([fkPayrollCalendarMaster]) REFERENCES [PayrollCalendarMaster] ([pkPayrollCalendarMaster]),
+    CONSTRAINT [FK_FileQueueMaster_Template] FOREIGN KEY ([fkTemplate]) REFERENCES [Template]([pkTemplate]),
+    CONSTRAINT [FK_FileQueueMaster_FileUploadStatus] FOREIGN KEY ([fkFileUploadStatus]) REFERENCES [FileUploadStatus]([pkFileUploadStatus])
+) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = [dbo].[FileQueueMasterLog]))
+
+
+CREATE TABLE [dbo].[PayrollCalendarMaster]
+(
+	[pkPayrollCalendarMaster] INT NOT NULL IDENTITY,
+    [fkEntity] INT NOT NULL,
+	[Year] INT NOT NULL,
+	[Month] VARCHAR(10) NOT NULL,
+    CONSTRAINT [PK_PayrollCalendarMaster] PRIMARY KEY ([pkPayrollCalendarMaster]),
+    CONSTRAINT [FK_PayrollCalendarMaster_Entity] FOREIGN KEY ([fkEntity]) REFERENCES [Entity] ([pkEntity]) ON DELETE CASCADE
+)
+
+CREATE TABLE [dbo].[PayrollCalendar](
+	[pkPayrollCalendar] [int] IDENTITY(1,1) NOT NULL,
+	[fkPayrollCalendarFile] [int]  NULL,
+	[fkPayrollCalendarMaster] INT NULL,
+	[fkEntity] [int] NULL,
+	[fkCurrency] [int] NOT NULL,	
+	[LocalReportFXRate] DECIMAL(18,6) NULL,
+	[ReportLocalFXRate] DECIMAL(18,6)NULL ,
+	[PayCycle] [varchar](20) NULL,
+	[Year] [int] NULL,
+	[Month] varchar(10) NULL,
+	[PayNumber] [varchar] (2) NULL,
+	[PayrollType] [varchar](20) NULL,
+	[PayPeriodBeginDate] DATETIME NULL,
+	[PayPeriodEndDate] DATETIME NULL,
+	[PayrollPayDate] DATETIME NULL,
+	[ProcessStartDate] DATETIME NULL,
+	[ProcessEndDate] DATETIME NULL,
+	[ActualEndDate] DATETIME NULL,
+	[ActualFileRecevied] DATETIME NULL,
+	[GreenStatus] [int] NULL,
+	[AmberStatus] [int] NULL,
+	[ExpectedPayrollProductionTime] DATETIME NULL,
+	[NoDaysToCompletePayroll] [int] NULL,
+	[NoDaysToFileReceived] [int] NULL,
+	[NaturalCurrency] [decimal](18, 4) NULL,
+	[PointOfContact] [varchar](100) NULL,
+	[IsDeleted] bit,
+	[IsBaselineMetricAvailable] bit,
+	[CreatedBy] [nvarchar](100) NULL,
+	[CreatedOn] DATETIME NULL,
+	[UpdatedBy] [nvarchar](100) NULL,
+	[UpdatedOn] DATETIME NULL,
+	[PayrollApprovalDate] DateTime null,
+	 SysStartTime datetime2 GENERATED ALWAYS AS ROW START NOT NULL
+  ,SysEndTime datetime2 GENERATED ALWAYS AS ROW END NOT NULL
+   ,PERIOD FOR SYSTEM_TIME (SysStartTime,SysEndTime),
+
+ CONSTRAINT [PK_PayrollCalendar] PRIMARY KEY CLUSTERED 
+(
+	[pkPayrollCalendar] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.PayrollCalendarLog))
+
+
+
+CREATE TABLE [dbo].[TemplateClientTemplateMapping](
+	[MappingId] [int] IDENTITY(1,1) NOT NULL,
+	[fkTemplateId] [int] NOT NULL,
+	[fkTemplateColumnId] [int] NOT NULL,
+	[fkEntityId] [int] NULL,
+	[fkClientTemplateColumnId] [int] NOT NULL,
+	CONSTRAINT [PK_TemplateClientTemplateMapping] PRIMARY KEY CLUSTERED ([MappingId] ASC),
+    CONSTRAINT [FK_TemplateClientTemplateMapping_Template] FOREIGN KEY ([fkTemplateId]) REFERENCES [dbo].[Template] ([pkTemplate]),
+	CONSTRAINT [FK_TemplateClientTemplateMapping_TemplateColumn] FOREIGN KEY ([fkTemplateColumnId]) REFERENCES [dbo].[TemplateColumn] ([pkTemplateColumn]),
+	CONSTRAINT [FK_TemplateClientTemplateMapping_Entity] FOREIGN KEY ([fkEntityId]) REFERENCES [dbo].[Entity] ([pkEntity]) ON DELETE CASCADE,
+	CONSTRAINT [FK_TemplateClientTemplateMapping_ClientTemplateColumn] FOREIGN KEY ([fkClientTemplateColumnId]) REFERENCES [dbo].[ClientTemplateColumn] ([pkClientTemplateColumn])
+
+)
+
+
+
+CREATE PROCEDURE [dbo].[usp_GetPayrollCalendarForFileUpload] @isOneTimeUpload BIT
+AS
+BEGIN
+	DECLARE @previousMonthdate DATE
+	DECLARE @previousMonth VARCHAR(10)
+		,@previusYear VARCHAR(4)
+	DECLARE @PayrollCalendarStatus TABLE (
+		STATUS VARCHAR(50)
+		,EntityId INT
+		,Year INT
+		,Month VARCHAR(10)
+		);
+	DECLARE @DemographicStatus TABLE (
+		STATUS VARCHAR(50)
+		,EntityId INT
+		,Recordcount INT
+		,Year INT
+		,Month VARCHAR(10)
+		);
+
+	WITH PayrollCalendarStatus
+	AS (
+		SELECT FQ.fkFileUploadStatus AS STATUS
+			,PCM.fkEntity AS EntityId
+			,PCM.Year AS Year
+			,TRIM(PCM.Month) AS Month
+		FROM PayrollCalendarMaster PCM
+		JOIN PayrollCalendar PC ON PC.fkPayrollCalendarMaster = PCM.pkPayrollCalendarMaster
+		LEFT JOIN FileQueue FQ ON FQ.fkPayrollCalendar = PC.pkPayrollCalendar
+		GROUP BY FQ.fkFileUploadStatus
+			,PCM.fkEntity
+			,PCM.Month
+			,PCM.Year
+		)
+	INSERT INTO @PayrollCalendarStatus
+	SELECT STATUS
+		,EntityId
+		,Year
+		,Month
+	FROM PayrollCalendarStatus;
+
+	WITH DemographicStatus
+	AS (
+		SELECT FQM.fkFileUploadStatus AS STATUS
+			,PCM.fkEntity AS EntityId
+			,FQM.RecordCount AS RecordCount
+			,PCM.Year AS Year
+			,TRIM(PCM.Month) AS Month
+		FROM PayrollCalendarMaster PCM
+		JOIN PayrollCalendar PC ON PCM.fkEntity = PC.fkEntity
+		JOIN FileQueueMaster FQM ON FQM.fkPayrollCalendarMaster = PCM.pkPayrollCalendarMaster
+		WHERE FQM.fkTemplate = 2
+		GROUP BY FQM.fkFileUploadStatus
+			,PCM.fkEntity
+			,FQM.RecordCount
+			,PCM.Year
+			,PCM.Month
+		)
+	INSERT INTO @DemographicStatus
+	SELECT STATUS
+		,EntityId
+		,RecordCount
+		,Year
+		,Month
+	FROM DemographicStatus;
+
+	SET @previousMonthdate = DATEADD(MONTH, DATEDIFF(MONTH, 0, GETUTCDATE()) - 1, 0)
+	SET @previousMonth = LEFT(DATENAME(MONTH, @previousMonthdate), 10)
+	SET @previusYear = LEFT(DATENAME(YEAR, @previousMonthdate), 10)
+
+	IF (@isOneTimeUpload = 1)
+	BEGIN
+		DECLARE @MonthsList TABLE (Name VARCHAR(50))
+		DECLARE @start DATE = DATEADD(yy, DATEDIFF(yy, 0, GETDATE()), 0)
+		DECLARE @end DATE = getdate();
+
+		WITH months (DATE)
+		AS (
+			SELECT @start
+			
+			UNION ALL
+			
+			SELECT DATEADD(month, 1, DATE)
+			FROM months
+			WHERE DATEADD(month, 1, DATE) <= @end
+			)
+		INSERT INTO @MonthsList
+		SELECT Datename(month, DATE)
+		FROM months
+
+		SELECT DISTINCT E.pkEntity
+			,E.EntityName
+			,E.FedId
+			,C.Country
+			,R.Region
+			,PC.Year
+			,PC.Month
+			,PG.PayGroup
+			,CASE 
+				WHEN (
+						Count(CASE 
+								WHEN tc.fkEntityId IN (E.pkEntity)
+									AND tc.fkTemplateId = 1
+									THEN 1
+								ELSE NULL
+								END)
+						) > 0
+					THEN Cast(1 AS BIT)
+				ELSE Cast(0 AS BIT)
+				END AS PayRollRegisterUploaded
+			,CASE 
+				WHEN (
+						Count(CASE 
+								WHEN tc.fkEntityId IN (E.pkEntity)
+									AND tc.fkTemplateId = 2
+									THEN 1
+								ELSE NULL
+								END)
+						) > 0
+					THEN Cast(1 AS BIT)
+				ELSE Cast(0 AS BIT)
+				END AS DemographicUploaded
+			,E.fkFileType
+			,E.IsSplitAllowed
+			,CASE 
+				WHEN (
+						(
+							SELECT TOP 1 'Error'
+							FROM @PayrollCalendarStatus s
+							WHERE s.EntityId IN (E.pkEntity)
+								AND s.Year IN (Pc.Year)
+								AND s.Month IN (TRIM(Pc.Month))
+								AND s.STATUS IN (
+									3
+									,6
+									)
+							) = 'Error'
+						)
+					THEN 'Error'
+				WHEN (
+						(
+							SELECT TOP 1 'In Progress'
+							FROM @PayrollCalendarStatus s
+							WHERE s.EntityId IN (E.pkEntity)
+								AND s.Year IN (Pc.Year)
+								AND s.Month IN (TRIM(Pc.Month))
+								AND (
+									SELECT TOP 1 1
+									FROM TemplateClientTemplateMapping
+									WHERE fkentityid = E.pkEntity
+										AND fkTemplateId = 2
+									) = 1
+								AND (
+									SELECT TOP 1 1
+									FROM TemplateClientTemplateMapping
+									WHERE fkentityid = E.pkEntity
+										AND fkTemplateId = 1
+									) = 1
+								AND (
+									s.STATUS IN (
+										1
+										,2
+										,4
+										,10
+										)
+									OR s.STATUS IS NULL
+									)
+								AND (
+									(
+										SELECT Count(1)
+										FROM FileQueue fq
+										JOIN PayrollCalendar p ON fq.fkPayrollCalendar = p.pkPayrollCalendar
+										WHERE fkEntity = E.pkEntity
+											AND p.pkPayrollCalendar = pc.pkPayrollCalendar
+										) <> 0
+									)
+							) = 'In Progress'
+						)
+					THEN 'In Progress'
+				WHEN (
+						(
+							SELECT TOP 1 'Completed'
+							FROM @PayrollCalendarStatus s
+							WHERE s.EntityId IN (E.pkEntity)
+								AND s.Year IN (Pc.Year)
+								AND s.Month IN (TRIM(Pc.Month))
+								AND s.STATUS IN (
+									5
+									,11
+									,12
+									)
+							) = 'Completed'
+						)
+					THEN 'Completed'
+				ELSE ''
+				END AS PayrollRegisterStatus
+			,CASE 
+				WHEN (
+						(
+							SELECT TOP 1 'Error'
+							FROM @DemographicStatus ds
+							WHERE ds.EntityId IN (E.pkEntity)
+								AND ds.Year IN (Pc.Year)
+								AND ds.Month IN (TRIM(Pc.Month))
+								AND ds.STATUS IN (
+									3
+									,6
+									)
+							) = 'Error'
+						)
+					THEN 'Error'
+				WHEN (
+						(
+							SELECT TOP 1 'In Progress'
+							FROM @DemographicStatus ds
+							WHERE ds.EntityId IN (E.pkEntity)
+								AND ds.Year IN (Pc.Year)
+								AND ds.Month IN (TRIM(Pc.Month))
+								AND ds.STATUS IN (
+									1
+									,2
+									,4
+									,10
+									)
+							) = 'In Progress'
+						)
+					THEN 'In Progress'
+				WHEN (
+						(
+							SELECT TOP 1 'Completed'
+							FROM @DemographicStatus ds
+							WHERE ds.EntityId IN (E.pkEntity)
+								AND ds.Year IN (Pc.Year)
+								AND ds.Month IN (TRIM(Pc.Month))
+								AND ds.STATUS IN (
+									5
+									,11
+									,12
+									)
+							) = 'Completed'
+						)
+					THEN 'Completed'
+				ELSE ''
+				END AS DemographicStatus
+			,(
+				SELECT TOP 1 Recordcount
+				FROM @DemographicStatus ds
+				WHERE ds.EntityId IN (E.pkEntity)
+					AND ds.Year IN (Pc.Year)
+					AND ds.Month IN (TRIM(Pc.Month))
+				) AS RecordCount
+		FROM PayrollCalendar PC
+		INNER JOIN Entity E ON PC.fkEntity = E.pkEntity
+		INNER JOIN Currency CU ON CU.pkCurrency = PC.fkCurrency
+		INNER JOIN Country C ON E.fkCountry = C.pkCountry
+		INNER JOIN Region R ON E.fkRegion = R.pkRegion
+		INNER JOIN PayGroup PG ON E.fkPayGroup = PG.pkPayGroup
+		LEFT JOIN TemplateClientTemplateMapping tc ON tc.fkEntityId = E.pkEntity
+		WHERE (
+				(
+					[Year] = LEFT(DATENAME(YEAR, GETUTCDATE()), 10)
+					AND [Month] IN (
+						SELECT Name
+						FROM @MonthsList
+						)
+					)
+				OR [YEAR] < LEFT(DATENAME(YEAR, GETUTCDATE()), 10)
+				)
+		GROUP BY E.pkEntity
+			,E.EntityName
+			,E.FedId
+			,C.Country
+			,R.Region
+			,PC.Year
+			,PC.Month
+			,PG.PayGroup
+			,E.fkFileType
+			,E.IsSplitAllowed
+			,pc.pkPayrollCalendar
+	END
+	ELSE
+	BEGIN
+		SELECT DISTINCT E.pkEntity
+			,E.EntityName
+			,E.FedId
+			,C.Country
+			,R.Region
+			,PC.Year
+			,PC.Month
+			,PG.PayGroup
+			,CASE 
+				WHEN (
+						Count(CASE 
+								WHEN tc.fkEntityId IN (E.pkEntity)
+									AND tc.fkTemplateId = 1
+									THEN 1
+								ELSE NULL
+								END)
+						) > 0
+					THEN Cast(1 AS BIT)
+				ELSE Cast(0 AS BIT)
+				END AS PayRollRegisterUploaded
+			,CASE 
+				WHEN (
+						Count(CASE 
+								WHEN tc.fkEntityId IN (E.pkEntity)
+									AND tc.fkTemplateId = 2
+									THEN 1
+								ELSE NULL
+								END)
+						) > 0
+					THEN Cast(1 AS BIT)
+				ELSE Cast(0 AS BIT)
+				END AS DemographicUploaded
+			,E.fkFileType
+			,E.IsSplitAllowed
+			,CASE 
+				WHEN (
+						(
+							SELECT TOP 1 'Error'
+							FROM @PayrollCalendarStatus s
+							WHERE s.EntityId IN (E.pkEntity)
+								AND s.Year IN (Pc.Year)
+								AND s.Month IN (TRIM(Pc.Month))
+								AND s.STATUS IN (
+									3
+									,6
+									)
+							) = 'Error'
+						)
+					THEN 'Error'
+				WHEN (
+						(
+							SELECT TOP 1 'In Progress'
+							FROM @PayrollCalendarStatus s
+							WHERE s.EntityId IN (E.pkEntity)
+								AND s.Year IN (Pc.Year)
+								AND s.Month IN (TRIM(Pc.Month))
+								AND (
+									SELECT TOP 1 1
+									FROM TemplateClientTemplateMapping
+									WHERE fkentityid = E.pkEntity
+										AND fkTemplateId = 2
+									) = 1
+								AND (
+									SELECT TOP 1 1
+									FROM TemplateClientTemplateMapping
+									WHERE fkentityid = E.pkEntity
+										AND fkTemplateId = 1
+									) = 1
+								AND (
+									s.STATUS IN (
+										1
+										,2
+										,4
+										,10
+										)
+									OR s.STATUS IS NULL
+									)
+								AND (
+									(
+										SELECT Count(1)
+										FROM FileQueue fq
+										JOIN PayrollCalendar p ON fq.fkPayrollCalendar = p.pkPayrollCalendar
+										WHERE fkEntity = E.pkEntity
+											AND p.pkPayrollCalendar = pc.pkPayrollCalendar
+										) <> 0
+									)
+							) = 'In Progress'
+						)
+					THEN 'In Progress'
+				WHEN (
+						(
+							SELECT TOP 1 'Completed'
+							FROM @PayrollCalendarStatus s
+							WHERE s.EntityId IN (E.pkEntity)
+								AND s.Year IN (Pc.Year)
+								AND s.Month IN (TRIM(Pc.Month))
+								AND s.STATUS IN (
+									5
+									,11
+									,12
+									)
+							) = 'Completed'
+						)
+					THEN 'Completed'
+				ELSE ''
+				END AS PayrollRegisterStatus
+			,CASE 
+				WHEN (
+						(
+							SELECT TOP 1 'Error'
+							FROM @DemographicStatus ds
+							WHERE ds.EntityId IN (E.pkEntity)
+								AND ds.Year IN (Pc.Year)
+								AND ds.Month IN (TRIM(Pc.Month))
+								AND ds.STATUS IN (
+									3
+									,6
+									)
+							) = 'Error'
+						)
+					THEN 'Error'
+				WHEN (
+						(
+							SELECT TOP 1 'In Progress'
+							FROM @DemographicStatus ds
+							WHERE ds.EntityId IN (E.pkEntity)
+								AND ds.Year IN (Pc.Year)
+								AND ds.Month IN (TRIM(Pc.Month))
+								AND ds.STATUS IN (
+									1
+									,2
+									,4
+									,10
+									)
+							) = 'In Progress'
+						)
+					THEN 'In Progress'
+				WHEN (
+						(
+							SELECT TOP 1 'Completed'
+							FROM @DemographicStatus ds
+							WHERE ds.EntityId IN (E.pkEntity)
+								AND ds.Year IN (Pc.Year)
+								AND ds.Month IN (TRIM(Pc.Month))
+								AND ds.STATUS IN (
+									5
+									,11
+									,12
+									)
+							) = 'Completed'
+						)
+					THEN 'Completed'
+				ELSE ''
+				END AS DemographicStatus
+			,(
+				SELECT TOP 1 Recordcount
+				FROM @DemographicStatus ds
+				WHERE ds.EntityId IN (E.pkEntity)
+					AND ds.Year IN (Pc.Year)
+					AND ds.Month IN (TRIM(Pc.Month))
+				) AS RecordCount
+		FROM PayrollCalendar PC
+		INNER JOIN Entity E ON PC.fkEntity = E.pkEntity
+		INNER JOIN Currency CU ON CU.pkCurrency = PC.fkCurrency
+		INNER JOIN Country C ON E.fkCountry = C.pkCountry
+		INNER JOIN Region R ON E.fkRegion = R.pkRegion
+		INNER JOIN PayGroup PG ON E.fkPayGroup = PG.pkPayGroup
+		LEFT JOIN TemplateClientTemplateMapping tc ON tc.fkEntityId = E.pkEntity
+		WHERE (
+				[Month] = LEFT(DATENAME(MONTH, GETUTCDATE()), 10)
+				AND [Year] = LEFT(DATENAME(YEAR, GETUTCDATE()), 10)
+				)
+			OR (
+				[Month] = @previousMonth
+				AND [Year] = @previusYear
+				)
+		GROUP BY E.pkEntity
+			,E.EntityName
+			,E.FedId
+			,C.Country
+			,R.Region
+			,PC.Year
+			,PC.Month
+			,PG.PayGroup
+			,E.fkFileType
+			,E.IsSplitAllowed
+			,pc.pkPayrollCalendar
+	END
+END
