@@ -651,3 +651,13 @@ BEGIN
 			,pc.pkPayrollCalendar
 	END
 END
+
+
+DECLARE @PayrollCalendarStatus TABLE (
+		STATUS VARCHAR(50)
+		
+		);
+
+please update ,EntityId INT
+		,Year INT
+		,Month VARCHAR(10)  combination with pkPayrollCalendarMaster
