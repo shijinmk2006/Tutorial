@@ -202,30 +202,6 @@ CREATE TABLE [dbo].[PayrollRegister]
 )
 
 
-PRINT N'Checking if [Reports].[DemographicsMetrics] has contents...';
-IF NOT EXISTS (SELECT TOP 1 1 FROM [Reports].[DemographicsMetrics])
-BEGIN
-	PRINT N'Starting [Reports].[DemographicsMetrics] migration...';
-	DECLARE @TempPayrollCalendar TABLE (CalendarId INT, IsMigrated BIT);
-	INSERT INTO @TempPayrollCalendar (CalendarId, IsMigrated)
-	SELECT pkPayrollCalendar AS CalendarId, 0 AS IsMigrated FROM [dbo].[PayrollCalendar]
-
-	WHILE (SELECT COUNT(1) FROM @TempPayrollCalendar WHERE IsMigrated = 0) > 0
-	BEGIN
-		DECLARE @TempCalendarId INT = (SELECT TOP 1 CalendarId FROM @TempPayrollCalendar WHERE IsMigrated = 0)
-		PRINT N'Migrating CalendarId: '+CAST(@TempCalendarId AS NVARCHAR(MAX))+'...';
-		EXEC [Reports].[usp_InsertDemographicsMetricsByPayrollCalendar] @TempCalendarId
-		UPDATE @TempPayrollCalendar SET IsMigrated = 1 WHERE CalendarId = @TempCalendarId
-	END
-	PRINT N'[Reports].[DemographicsMetrics] migration completed...';
-END
-ELSE
-BEGIN
-	PRINT N'Skipping [Reports].[DemographicsMetrics] migration because it has contents...';
-END
-
-
-
 CREATE PROCEDURE [Reports].[usp_InsertDemographicsMetricsByPayrollCalendar]
 	@CalendarId INT = 0
 AS
@@ -554,4 +530,27 @@ BEGIN
 		OR	COALESCE(EWMP.Value,0) <> 0
 		OR	COALESCE(TE.Value,0) <> 0
 		OR	COALESCE(TPP.Value,0) <> 0
+END
+
+
+PRINT N'Checking if [Reports].[DemographicsMetrics] has contents...';
+IF NOT EXISTS (SELECT TOP 1 1 FROM [Reports].[DemographicsMetrics])
+BEGIN
+	PRINT N'Starting [Reports].[DemographicsMetrics] migration...';
+	DECLARE @TempPayrollCalendar TABLE (CalendarId INT, IsMigrated BIT);
+	INSERT INTO @TempPayrollCalendar (CalendarId, IsMigrated)
+	SELECT pkPayrollCalendar AS CalendarId, 0 AS IsMigrated FROM [dbo].[PayrollCalendar]
+
+	WHILE (SELECT COUNT(1) FROM @TempPayrollCalendar WHERE IsMigrated = 0) > 0
+	BEGIN
+		DECLARE @TempCalendarId INT = (SELECT TOP 1 CalendarId FROM @TempPayrollCalendar WHERE IsMigrated = 0)
+		PRINT N'Migrating CalendarId: '+CAST(@TempCalendarId AS NVARCHAR(MAX))+'...';
+		EXEC [Reports].[usp_InsertDemographicsMetricsByPayrollCalendar] @TempCalendarId
+		UPDATE @TempPayrollCalendar SET IsMigrated = 1 WHERE CalendarId = @TempCalendarId
+	END
+	PRINT N'[Reports].[DemographicsMetrics] migration completed...';
+END
+ELSE
+BEGIN
+	PRINT N'Skipping [Reports].[DemographicsMetrics] migration because it has contents...';
 END
