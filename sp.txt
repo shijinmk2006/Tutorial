@@ -1,556 +1,187 @@
-
-CREATE TABLE [dbo].[Demographics]
-(
-	[pkDemographics] [int] IDENTITY(1,1) NOT NULL,
-	[fkFileQueue] [int]  NULL,
-	[fkFileQueueMaster] [int]  NULL,
-	[ID] VARCHAR(1000) NULL,
-	[BusinessUnit] VARCHAR(1000)  NULL,
-	[Department] VARCHAR(1000)  NULL,
-	[EMPStatus] VARCHAR(1000)  NULL,
-	[JoiningDate] DATE  NULL,
-	[TerminationDate] DATE NULL,
-	[EMPType] VARCHAR(1000)  NULL,
-	[CostCodes] VARCHAR(1000)  NULL,
-	[FTE] DECIMAL(11,2)  NULL,
-	[Gender] nvarchar(1000) NULL,
-	[DoorCode] nvarchar(1000) NULL,
-	[Placeholder1] nvarchar(1000) NULL,
-	[Placeholder2] nvarchar(1000) NULL,
-	[Placeholder3] nvarchar(1000) NULL,
-	[Placeholder4] nvarchar(1000) NULL,
-	[Placeholder5] nvarchar(1000) NULL,
-CONSTRAINT [PK_Demographics] PRIMARY KEY CLUSTERED ([pkDemographics] ASC),
-CONSTRAINT [FK_Demographics_FileQueue] FOREIGN KEY([fkFileQueue]) REFERENCES [dbo].[FileQueue] ([pkFileQueue]),
-CONSTRAINT [FK_Demographics_FileQueueMaster] FOREIGN KEY([fkFileQueueMaster]) REFERENCES [dbo].[FileQueueMaster] ([pkFileQueueMaster])
+CREATE TABLE [dbo].[BaselineMetricsLog](
+	[pkBaselineMetrics] [int] NOT NULL,
+	[fkBaselineMetricsFile] [int] NOT NULL,
+	[fkEntity] [int] NOT NULL,
+	[Year] [int] NOT NULL
+) 
+CREATE TABLE [dbo].[BaselineMetrics](
+	[pkBaselineMetrics] [int] IDENTITY(1,1) NOT NULL,
+	[fkBaselineMetricsFile] [int] NOT NULL,
+	[fkEntity] [int] NOT NULL,
+	[Year] [int] NOT NULL
 )
 
-CREATE TABLE [dbo].[FileQueueMaster]
-(
-	[pkFileQueueMaster] INT NOT NULL IDENTITY,
-    [fkPayrollCalendarMaster] INT NOT NULL,
-    [fkTemplate] INT NOT NULL,
-    [fkFileUploadStatus] INT NOT NULL,
-    [Location] VARCHAR(500) NOT NULL,
-    [ActualFileName] VARCHAR(250) NOT NULL, 
-    [UniqueFileName] VARCHAR(250) NOT NULL, 
-    [CreatedBy] VARCHAR(100) NULL, 
-    [CreatedOn] DATETIME NULL, 
-    [UpdatedBy] VARCHAR(100) NULL, 
-    [UpdatedOn] DATETIME NULL,
-    [SysStartTime] DATETIME2 GENERATED ALWAYS AS ROW START NOT NULL,
-    [SysEndTime] DATETIME2 GENERATED ALWAYS AS ROW END NOT NULL,
-    [RecordCount] int  NULL ,
-    PERIOD FOR SYSTEM_TIME ([SysStartTime], [SysEndTime]),
-    CONSTRAINT [PK_FileQueueMaster] PRIMARY KEY ([pkFileQueueMaster]),
-    CONSTRAINT [FK_FileQueueMaster_PayrollCalendarMaster] FOREIGN KEY ([fkPayrollCalendarMaster]) REFERENCES [PayrollCalendarMaster] ([pkPayrollCalendarMaster]),
-    CONSTRAINT [FK_FileQueueMaster_Template] FOREIGN KEY ([fkTemplate]) REFERENCES [Template]([pkTemplate]),
-    CONSTRAINT [FK_FileQueueMaster_FileUploadStatus] FOREIGN KEY ([fkFileUploadStatus]) REFERENCES [FileUploadStatus]([pkFileUploadStatus])
-) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = [dbo].[FileQueueMasterLog]))
+CREATE TABLE [dbo].[DeltaMetricsPerPayCycleLog](
+	[pkDeltaMetricsPerPayCycle] [int] NOT NULL,
+	[fkBaselineMetrics] [int] NULL,
+	[fkPayrollCalendar] [int] NOT NULL
+) 
 
+CREATE TABLE [dbo].[DeltaMetricsPerPayCycle](
+	[pkDeltaMetricsPerPayCycle] [int] IDENTITY(1,1) NOT NULL,
+	[fkBaselineMetrics] [int] NULL,
+	[fkPayrollCalendar] [int] NOT NULL
+)
+CREATE TABLE [dbo].[FileQueueLog](
+	[pkFileQueue] [int] NOT NULL,
+	[fkFileQueueMaster] [int] NULL,
+	[fkPayrollCalendar] [int] NOT NULL,
+	[fkFileUploadStatus] [int] NOT NULL,
+	[FileType] [varchar](20) NULL
+
+) 
+CREATE TABLE [dbo].[FileQueue](
+	[pkFileQueue] [int] IDENTITY(1,1) NOT NULL,
+	[fkFileQueueMaster] [int] NULL,
+	[fkPayrollCalendar] [int] NOT NULL,
+	[fkFileUploadStatus] [int] NOT NULL,
+	[FileType] [varchar](20) NULL,
+)
+
+CREATE TABLE [dbo].[FileQueueMasterLog](
+	[pkFileQueueMaster] [int] NOT NULL,
+	[fkPayrollCalendarMaster] [int] NOT NULL,
+	[fkTemplate] [int] NOT NULL,
+	[fkFileUploadStatus] [int] NOT NULL
+)
+
+CREATE TABLE [dbo].[FileQueueMaster](
+	[pkFileQueueMaster] [int] IDENTITY(1,1) NOT NULL,
+	[fkPayrollCalendarMaster] [int] NOT NULL,
+	[fkTemplate] [int] NOT NULL,
+	[fkFileUploadStatus] [int] NOT NULL
+)
+
+CREATE TABLE [dbo].[PayrollCalendarLog](
+	[pkPayrollCalendar] [int] NOT NULL,
+	[fkPayrollCalendarFile] [int] NULL,
+	[fkPayrollCalendarMaster] [int] NULL,
+	[fkEntity] [int] NULL,
+	[fkCurrency] [int] NOT NULL,
+	[Year] [int] NULL,
+	[Month] [varchar](10) NULL,
+
+) 
 CREATE TABLE [dbo].[PayrollCalendar](
 	[pkPayrollCalendar] [int] IDENTITY(1,1) NOT NULL,
-	[fkPayrollCalendarFile] [int]  NULL,
-	[fkPayrollCalendarMaster] INT NULL,
+	[fkPayrollCalendarFile] [int] NULL,
+	[fkPayrollCalendarMaster] [int] NULL,
 	[fkEntity] [int] NULL,
-	[fkCurrency] [int] NOT NULL,	
-	[LocalReportFXRate] DECIMAL(18,6) NULL,
-	[ReportLocalFXRate] DECIMAL(18,6)NULL ,
-	[PayCycle] [varchar](20) NULL,
+	[fkCurrency] [int] NOT NULL,
 	[Year] [int] NULL,
-	[Month] varchar(10) NULL,
-	[PayNumber] [varchar] (2) NULL,
-	[PayrollType] [varchar](20) NULL,
-	[PayPeriodBeginDate] DATETIME NULL,
-	[PayPeriodEndDate] DATETIME NULL,
-	[PayrollPayDate] DATETIME NULL,
-	[ProcessStartDate] DATETIME NULL,
-	[ProcessEndDate] DATETIME NULL,
-	[ActualEndDate] DATETIME NULL,
-	[ActualFileRecevied] DATETIME NULL,
-	[GreenStatus] [int] NULL,
-	[AmberStatus] [int] NULL,
-	[ExpectedPayrollProductionTime] DATETIME NULL,
-	[NoDaysToCompletePayroll] [int] NULL,
-	[NoDaysToFileReceived] [int] NULL,
-	[NaturalCurrency] [decimal](18, 4) NULL,
-	[PointOfContact] [varchar](100) NULL,
-	[IsDeleted] bit,
-	[IsBaselineMetricAvailable] bit,
-	[CreatedBy] [nvarchar](100) NULL,
-	[CreatedOn] DATETIME NULL,
-	[UpdatedBy] [nvarchar](100) NULL,
-	[UpdatedOn] DATETIME NULL,
-	[PayrollApprovalDate] DateTime null
+	[Month] [varchar](10) NULL,
 )
-CREATE TABLE [dbo].[PayrollRegister]
-(
-	[pkPayrollRegister] [int] IDENTITY(1,1) NOT NULL,
+CREATE TABLE [dbo].[BaselineMetricsFile](
+	[pkBaselineMetricsFile] [int] IDENTITY(1,1) NOT NULL
+)
+CREATE TABLE [dbo].[ClientOffCycleFilterColumn](
+	[pkClientOffCycleFilterColumn] [int] IDENTITY(1,1) NOT NULL,
+	[fkEntity] [int] NOT NULL,
+	[fkTemplate] [int] NOT NULL,
+	[fkPayrollOffCycleFilterColumn] [int] NOT NULL,
+)
+CREATE TABLE [dbo].[ClientPayCycleType](
+	[Id] [int] IDENTITY(1,1) NOT NULL,
+	[EntityId] [int] NOT NULL
+)
+CREATE TABLE [dbo].[ClientTemplateColumn](
+	[pkClientTemplateColumn] [int] IDENTITY(1,1) NOT NULL,
+	[fkTemplateLocation] [int] NOT NULL,
+	[fkEntityId] [int] NULL
+)
+CREATE TABLE [dbo].[ClientTemplateFilterColumn](
+	[pkClientTemplateFilterColumn] [int] IDENTITY(1,1) NOT NULL,
+	[fkEntityId] [int] NULL
+)
+CREATE TABLE [dbo].[ClientTemplateLocation](
+	[pkTemplateLocation] [int] IDENTITY(1,1) NOT NULL,
+	[fkTemplate] [int] NOT NULL
+)
+CREATE TABLE [dbo].[Demographics](
+	[pkDemographics] [int] IDENTITY(1,1) NOT NULL,
+	[fkFileQueue] [int] NULL,
+	[fkFileQueueMaster] [int] NULL
+)
+
+CREATE TABLE [dbo].[DemographicsFile](
+	[pkDemographicsFile] [int] IDENTITY(1,1) NOT NULL,
+	[Location] [varchar](100) NULL,
+	[FileName] [varchar](100) NULL,
+)
+
+CREATE TABLE [dbo].[DemographicsLog](
+	[pkDemographics] [int] NOT NULL,
 	[fkFileQueue] [int] NOT NULL,
-	[EMPID] VARCHAR(1000) NULL,
-	--[EMPName] VARCHAR(30) NOT NULL,
-	[RegularPayRateCode] VARCHAR(1000) NULL,
-	[Department] VARCHAR(1000) NULL,
-	[LocationDescription] VARCHAR(1000) NULL,
-	[CheckVoucherNum] VARCHAR(1000) NULL,
-	[PayDate] Date NULL,
-	[RegularHours] DECIMAL(18,2) NULL,
-	[OvertimeHours] DECIMAL(18,2) NULL,
-	[WeekendOvertimeHrs] DECIMAL(18,2) NULL,
-	[ShiftHours] DECIMAL(18,2) NULL,
-	[OnCallHours] DECIMAL(18,2) NULL,
-	[WeekendHours] DECIMAL(18,2) NULL,
-	[WeekendShiftHrs] DECIMAL(18,2) NULL,
-	[DoubleHours] DECIMAL(18,2) NULL,
-	[SalaryProcessed] VARCHAR(1000) NULL,
-	[GrossPay] DECIMAL(18,2) NULL,
-	[RegularEarningsTotal] DECIMAL(18,2) NULL,
-	[OvertimeEarningsTotal] DECIMAL(18,2) NULL,
-	[BereavementLeaveEarnings] DECIMAL(18,2) NULL,
-	[BonusEarnings] DECIMAL(18,2) NULL,
-	[BilingualDoubleTimeEarnings] DECIMAL(18,2) NULL,
-	[GrpTermLife_ImputedInc] DECIMAL(18,2) NULL,
-	[CommissionsEarnings] DECIMAL(18,2) NULL,
-	[DoubleTimeEarnings] DECIMAL(18,2) NULL,
-	[HolidayEarnings] DECIMAL(18,2) NULL,
-	[HolidayWorkedLateShiftEarnings] DECIMAL(18,2) NULL,
-	[IncentiveBonusEarnings] DECIMAL(18,2) NULL,
-	[JuryDutyEarnings] DECIMAL(18,2) NULL,
-	[LateShiftEarnings] DECIMAL(18,2) NULL,
-	[LeaveofAbsenceEarnings] DECIMAL(18,2) NULL,
-	[LATESHIFTOTEarnings] DECIMAL(18,2) NULL,
-	[MealPenaltyEarnings] DECIMAL(18,2) NULL,
-	[MILITARYLEAVEEarnings] DECIMAL(18,2) NULL,
-	[MiscEarnings] DECIMAL(18,2) NULL,
-	[GrossUpEarnings] DECIMAL(18,2) NULL,
-	[PaidLeaveEarnings] DECIMAL(18,2) NULL,
-	[PTOPayoutEarnings] DECIMAL(18,2) NULL,
-	[ReferralBonusEarnings] DECIMAL(18,2) NULL,
-	[RelocationBnsEarnings] DECIMAL(18,2) NULL,
-	[RestrictedStockEarnings] DECIMAL(18,2) NULL,
-	[RetentionEarnings] DECIMAL(18,2) NULL,
-	[RetroactivePayEarnings] DECIMAL(18,2) NULL,
-	[SignonBonusEarnings] DECIMAL(18,2) NULL,
-	[ShiftGuaranteeEarnings] DECIMAL(18,2) NULL,
-	[SpotBonusEarnings] DECIMAL(18,2) NULL,
-	[ShortTermDisabilityEarnings] DECIMAL(18,2) NULL,
-	[SeveranceEarnings] DECIMAL(18,2) NULL,
-	[WeekendShiftEarnings] DECIMAL(18,2) NULL,
-	[WeekendOTEarnings] DECIMAL(18,2) NULL,
-	[MedicareSurtaxDeductions] DECIMAL(18,2) NULL,
-	[BankruptcyGarnishment] DECIMAL(18,2) NULL,
-	[TaxLevyGarnishment] DECIMAL(18,2) NULL,
-	[RegularGarnishment] DECIMAL(18,2) NULL,
-	[ChildSupportGarnishment] DECIMAL(18,2) NULL,
-	[WageAgreementGarnishment] DECIMAL(18,2) NULL,
-	[DentalAfterTax]  DECIMAL(18,2) NULL,
-	[DependentCareFSA]  DECIMAL(18,2) NULL,
-	[DomesticPartnerDental_ImputedInc]  DECIMAL(18,2) NULL,
-    [DomesticPartnerMedical_ImputedInc]  DECIMAL(18,2) NULL,
-	[DentalPreTax] DECIMAL(18,2) NULL,
-	[DomesticPartnerVision_ImputedInc] DECIMAL(18,2) NULL,
-	[HealthSavingsAccount]  DECIMAL(18,2) NULL,
-	[HypoTax] DECIMAL(18,2) NULL,
-	[401_k] DECIMAL(18,2) NULL,
-	[403_B] DECIMAL(18,2) NULL,
-	[401_kLoan] DECIMAL(18,2) NULL,
-	[MedicalAfterTax] DECIMAL(18,2) NULL,
-	[MedicalFlexibleSpending]  DECIMAL(18,2) NULL,
-	[MedicalPreTax]  DECIMAL(18,2) NULL,
-	[QualifiedCommuterParkingn] DECIMAL(18,2) NULL,
-	[RothIRA] DECIMAL(18,2) NULL,
-	[QualifiedCommuterTransit] DECIMAL(18,2) NULL,
-	[TransitAfterTax]  DECIMAL(18,2) NULL,
-	[VisionAfterTax]  DECIMAL(18,2) NULL,
-	[VisionPreTax] DECIMAL(18,2) NULL,
-	[TotalDeductions] DECIMAL(18,2) NULL,
-	[TotalTaxes] DECIMAL(18,2) NULL,
-	[TotalEarnings] DECIMAL(18,2) NULL,
-	[NetPay] DECIMAL(18,2) NULL,
-	[Emp_HSAcontribution] DECIMAL(18,2) NULL,
-	[FamilyLeaveInsuranceEmp] DECIMAL(18,2) NULL,
-	[FederalIncomeEmployee] DECIMAL(18,2) NULL,
-	[MedicareEmployee] DECIMAL(18,2) NULL,
-	[MedicareSurtax_Employee] DECIMAL(18,2) NULL,
-	[SchoolDistrictTaxCode] DECIMAL(18)  NULL,
-	[SchoolDistrict_Tax] DECIMAL(18,2) NULL,
-	[SocialSecurityEmployee] DECIMAL(18,2) NULL,
-	[SUISDITaxCode] DECIMAL(18) NULL,
-	[SUISDIEmployee]  DECIMAL(18,2) NULL,
-	[TransitEmployee] DECIMAL(18,2) NULL,
-	[WorkedInStateTaxCode] INT NULL,
-	[WorkedInStateTax] DECIMAL(18,2) NULL,
-	[WorkedInLocalTaxCode] INT NULL,
-	[WorkedInLocalTax] DECIMAL(18,2) NULL,
-	[LivedInLocalTaxCode] INT NULL,
-	[LivedinLocalTax] DECIMAL(18,2) NULL,
-	[LivedInStateTaxCode] INT NULL,
-	[LivedinStateTax] DECIMAL(18,2) NULL,
-	[MedicareEmployer] DECIMAL(18,2) NULL,
-	[SocialSecurity_Employer] DECIMAL(18,2) NULL,
-	[SUI_SDIEmployer] DECIMAL(18,2) NULL,
-	[SocialInsurance_Employee]  DECIMAL(18,2) NULL,
-	[SocialInsurance_Employer]  DECIMAL(18,2) NULL,
-	[BenefitsinkindEmployee] DECIMAL(18,2) NULL,
-	[WorkersCompensationEmployee] DECIMAL(18,2) NULL,
-	[WorkersCompensationEmployer]   DECIMAL(18,2) NULL,
-	[Placeholder1] NVARCHAR(1000) NULL,
+	[fkCurrency] [int] NOT NULL
+)
 
+CREATE TABLE [dbo].[DemographicsStage](
+	[pkDemographicsStage] [int] IDENTITY(1,1) NOT NULL,
+	[fkFileQueue] [int] NULL,
+	[fkFileQueueMaster] [int] NULL
+)
+CREATE TABLE [dbo].[Entity](
+	[pkEntity] [int] IDENTITY(1,1) NOT NULL,
+	[fkCountry] [int] NOT NULL,
+	[fkRegion] [int] NOT NULL,
+	[fkPayGroup] [int] NOT NULL,
+	[FedId] [varchar](15) NOT NULL,
+	[fkFileType] [int] NOT NULL,
 
-	 CONSTRAINT [PK_PayrollRegister] PRIMARY KEY CLUSTERED ([pkPayrollRegister] ASC),  
-	 CONSTRAINT [FK_PayrollRegister_FileQueue] FOREIGN KEY([fkFileQueue]) REFERENCES [dbo].[FileQueue] ([pkFileQueue])
+)
+
+CREATE TABLE [dbo].[FederalIdentifier](
+	[pkFederalIdentifier] [int] IDENTITY(1,1) NOT NULL,
+	[Name] [int] NOT NULL,
+)
+CREATE TABLE [dbo].[FileProcessLog](
+	[pkFileLog] [int] IDENTITY(1,1) NOT NULL,
+	[fkFileQueue] [int] NOT NULL
+)
+CREATE TABLE [dbo].[FileProcessLogDemographics](
+	[pkFileLogDemographics] [int] IDENTITY(1,1) NOT NULL,
+	[fkFileQueueMaster] [int] NOT NULL
+)
+CREATE TABLE [dbo].[Metrics](
+	[pkMetrics] [int] IDENTITY(1,1) NOT NULL,
+	[fkPayrollCalendar] [int] NOT NULL
+)
+CREATE TABLE [dbo].[PayrollCalendarFile](
+	[pkPayrollCalendarFile] [int] IDENTITY(1,1) NOT NULL
+)
+CREATE TABLE [dbo].[PayrollCalendarMaster](
+	[pkPayrollCalendarMaster] [int] IDENTITY(1,1) NOT NULL,
+	[fkEntity] [int] NOT NULL,
+	[Year] [int] NOT NULL,
+	[Month] [varchar](10) NOT NULL,
+)
+CREATE TABLE [dbo].[PayrollOffCycleFilterColumn](
+	[pkPayrollOffCycleFilterColumn] [int] IDENTITY(1,1) NOT NULL,
+	[ColumnName] [varchar](100) NOT NULL,
+)
+
+CREATE TABLE [dbo].[PayrollRegister](
+	[pkPayrollRegister] [int] IDENTITY(1,1) NOT NULL,
+	[fkFileQueue] [int] NOT NULL
+)
+CREATE TABLE [dbo].[PayRollRegisterFile](
+	[pkPayRollRegisterFile] [int] IDENTITY(1,1) NOT NULL,
+	[Location] [varchar](100) NULL,
+	[FileName] [varchar](100) NULL,
+) 
+
+CREATE TABLE [dbo].[PayrollRegisterLog](
+	[pkPayrollRegister] [int] NOT NULL,
+	[fkFileQueue] [int] NOT NULL
+)
+
+CREATE TABLE [dbo].[PayRollRegisterStage](
+	[pkPayrollRegisterStage] [int] IDENTITY(1,1) NOT NULL,
+	[fkFileQueue] [int] NOT NULL
 )
 
 
-CREATE PROCEDURE [Reports].[usp_InsertDemographicsMetricsByPayrollCalendar]
-	@CalendarId INT = 0
-AS
-BEGIN
-	IF EXISTS(SELECT TOP 1 1 FROM [Reports].[DemographicsMetrics] WHERE CalendarId = @CalendarId)
-	BEGIN
-		DELETE FROM [Reports].[DemographicsMetrics] WHERE CalendarId = @CalendarId
-	END
-
-	--Bonus pay columns
-	DECLARE @BonusPay NVARCHAR(MAX) = (
-	  SELECT 
-		STRING_AGG('COALESCE(PR.['+DBColumnName+'],0)','+') 
-	  FROM 
-		[dbo].[TemplateColumn] TC 
-		INNER JOIN [dbo].[MetricCategory] MC
-			ON MC.pkMetricCategory = TC.fkMetricCategory
-		INNER JOIN [dbo].[MetricSubCategory] MSC
-			ON MSC.pkMetricSubCategory = TC.fkMetricSubCategory
-	  WHERE 
-			TC.fkTemplate = 1 
-		AND MetricSubCategory = 'Bonus'
-	);
-
-	--Demographics
-	DECLARE @Demographics TABLE(ID VARCHAR(1000), CalendarId INT, Department VARCHAR(1000), Type VARCHAR(1000), JoiningDate DATE, TerminationDate DATE);
-	INSERT INTO @Demographics (ID, CalendarId, Department, Type, JoiningDate, TerminationDate)
-	SELECT
-		 ID
-		,CalendarId
-		,Department
-		,Type
-		,JoiningDate
-		,TerminationDate
-	FROM (
-		SELECT
-			 D.ID
-			,PC.pkPayrollCalendar AS CalendarId
-			,D.Department
-			,D.EMPType AS Type
-			,D.JoiningDate
-			,D.TerminationDate
-			,ROW_NUMBER() OVER(PARTITION BY D.ID ORDER BY D.JoiningDate DESC, D.TerminationDate DESC) AS RN
-		FROM
-			[dbo].[Demographics] D
-			INNER JOIN [dbo].[FileQueueMaster] FQM
-				ON FQM.pkFileQueueMaster = D.fkFileQueueMaster
-			INNER JOIN [dbo].[PayrollCalendar] PC
-				ON PC.fkPayrollCalendarMaster = FQM.fkPayrollCalendarMaster
-		WHERE
-			PC.pkPayrollCalendar = @CalendarId) S
-	WHERE
-		S.RN = 1
-
-	--Demographics summary
-	DECLARE @DemographicsSummary TABLE(CalendarId INT, Department VARCHAR(1000));
-	INSERT INTO @DemographicsSummary (CalendarId, Department)
-	SELECT DISTINCT
-		 CalendarId
-		,Department
-	FROM
-		@Demographics
-	UNION
-	SELECT
-		 @CalendarId
-		,NULL
-	ORDER BY
-		Department
-
-	--Payroll register
-	DECLARE @PayrollRegister TABLE(ID VARCHAR(1000), CalendarId INT, NetPay DECIMAL(18,2), BonusPay DECIMAL(18,2));
-	DECLARE @PayrollRegisterScript NVARCHAR(MAX) = '
-	SELECT
-		 PR.EMPID AS ID
-		,FQ.fkPayrollCalendar AS CalendarId
-		,COALESCE(PR.NetPay,0) AS NetPay
-		,'+@BonusPay+' AS BonusPay
-	FROM
-		PayrollRegister PR
-		INNER JOIN FileQueue FQ
-			ON FQ.pkFileQueue = PR.fkFileQueue
-	WHERE
-		FQ.fkPayrollCalendar = '+CAST(@CalendarId AS NVARCHAR(MAX));
-	INSERT INTO @PayrollRegister (ID, CalendarId, NetPay, BonusPay)
-	EXEC SP_EXECUTESQL @PayrollRegisterScript
-
-	--Active Employees Paid
-	DECLARE @ActiveEmployeesPaid TABLE(CalendarId INT, Department VARCHAR(1000), Value INT);
-	INSERT INTO @ActiveEmployeesPaid (CalendarId, Department, Value)
-	SELECT
-		 PR.CalendarId
-		,D.Department
-		,COUNT(1) AS Value
-	FROM
-		(SELECT
-			 ID
-			,CalendarId
-			,SUM(NetPay) AS NetPay
-		FROM @PayrollRegister
-		GROUP BY
-			 ID
-			,CalendarId) PR
-		INNER JOIN @Demographics D
-			ON  D.ID = PR.ID
-			AND D.CalendarId = PR.CalendarId
-	WHERE
-			PR.NetPay <> 0
-		AND D.JoiningDate >= COALESCE(D.TerminationDate,CAST('1899-12-31' AS DATE))
-	GROUP BY
-		 PR.CalendarId
-		,D.Department
-
-	--Terminated Employees Paid
-	DECLARE @TerminatedEmployeesPaid TABLE(CalendarId INT, Department VARCHAR(1000), Value INT);
-	INSERT INTO @TerminatedEmployeesPaid (CalendarId, Department, Value)
-	SELECT
-		 PR.CalendarId
-		,D.Department
-		,COUNT(1) AS Value
-	FROM
-		(SELECT
-			 ID
-			,CalendarId
-			,SUM(NetPay) AS NetPay
-		FROM @PayrollRegister
-		GROUP BY
-			 ID
-			,CalendarId) PR
-		INNER JOIN @Demographics D
-			ON  D.ID = PR.ID
-			AND D.CalendarId = PR.CalendarId
-	WHERE
-			PR.NetPay <> 0
-		AND (D.JoiningDate IS NULL OR (TerminationDate IS NOT NULL AND D.JoiningDate < D.TerminationDate))
-	GROUP BY
-		 PR.CalendarId
-		,D.Department
-
-	--Zero Net Pay Employees
-	DECLARE @ZeroNetPayEmployees TABLE(CalendarId INT, Department VARCHAR(1000), Value INT);
-	INSERT INTO @ZeroNetPayEmployees (CalendarId, Department, Value)
-	SELECT
-		 PR.CalendarId
-		,D.Department
-		,COUNT(1) AS Value
-	FROM
-		(SELECT
-			 ID
-			,CalendarId
-			,SUM(NetPay) AS NetPay
-		FROM @PayrollRegister
-		GROUP BY
-			 ID
-			,CalendarId) PR
-		LEFT OUTER JOIN @Demographics D
-			ON  D.ID = PR.ID
-			AND D.CalendarId = PR.CalendarId
-	WHERE
-		PR.NetPay = 0
-	GROUP BY
-		 PR.CalendarId
-		,D.Department
-	
-	--Employees With Net Pay Greater Than 5k
-	DECLARE @EmployeesWithNetPayGreaterThan5k TABLE(CalendarId INT, Department VARCHAR(1000), Value INT);
-	INSERT INTO @EmployeesWithNetPayGreaterThan5k (CalendarId, Department, Value)
-	SELECT
-		 PR.CalendarId
-		,D.Department
-		,COUNT(1) AS Value
-	FROM
-		(SELECT
-			 ID
-			,CalendarId
-			,SUM(NetPay) AS NetPay
-		FROM @PayrollRegister
-		GROUP BY
-			 ID
-			,CalendarId) PR
-		LEFT OUTER JOIN @Demographics D
-			ON  D.ID = PR.ID
-			AND D.CalendarId = PR.CalendarId
-	WHERE
-		PR.NetPay > 5000
-	GROUP BY
-		 PR.CalendarId
-		,D.Department
-
-	--Employees With Bonus Pay
-	DECLARE @EmployeesWithBonusPay TABLE(CalendarId INT, Department VARCHAR(1000), Value INT);
-	INSERT INTO @EmployeesWithBonusPay (CalendarId, Department, Value)
-	SELECT
-		 PR.CalendarId
-		,D.Department
-		,COUNT(1) AS Value
-	FROM
-		(SELECT
-			 ID
-			,CalendarId
-			,SUM(BonusPay) AS BonusPay
-		FROM @PayrollRegister
-		GROUP BY
-			 ID
-			,CalendarId) PR
-		LEFT OUTER JOIN @Demographics D
-			ON  D.ID = PR.ID
-			AND D.CalendarId = PR.CalendarId
-	WHERE
-		PR.BonusPay <> 0
-	GROUP BY
-		 PR.CalendarId
-		,D.Department
-
-	--Employees With Multiple Payslips
-	DECLARE @EmployeesWithMultiplePayslips TABLE(CalendarId INT, Department VARCHAR(1000), Value INT);
-	INSERT INTO @EmployeesWithMultiplePayslips (CalendarId, Department, Value)
-	SELECT
-		 PR.CalendarId
-		,D.Department
-		,COUNT(1) AS Value
-	FROM
-		(SELECT
-			 ID
-			,CalendarId
-		FROM @PayrollRegister
-		GROUP BY
-			 ID
-			,CalendarId
-		HAVING
-			COUNT(1) > 1) PR
-		LEFT OUTER JOIN @Demographics D
-			ON  D.ID = PR.ID
-			AND D.CalendarId = PR.CalendarId
-	GROUP BY
-		 PR.CalendarId
-		,D.Department
-
-	--Total Employees
-	DECLARE @TotalEmployees TABLE(CalendarId INT, Department VARCHAR(1000), Value INT);
-	INSERT INTO @TotalEmployees (CalendarId, Department, Value)
-	SELECT
-		 ISNULL(PR.CalendarId, D.CalendarId) AS CalendarId
-		,D.Department
-		,COUNT(1) AS Value
-	FROM
-		(SELECT DISTINCT
-			 ID
-			,CalendarId
-		FROM @PayrollRegister) PR
-		FULL OUTER JOIN @Demographics D
-			ON  D.ID = PR.ID
-			AND D.CalendarId = PR.CalendarId
-	GROUP BY
-		 ISNULL(PR.CalendarId, D.CalendarId)
-		,D.Department
-	
-	--Total Payslips Produced
-	DECLARE @TotalPayslipsProduced TABLE(CalendarId INT, Department VARCHAR(1000), Value INT);
-	INSERT INTO @TotalPayslipsProduced (CalendarId, Department, Value)
-	SELECT
-		 PR.CalendarId
-		,D.Department
-		,COUNT(1) AS Value
-	FROM
-		@PayrollRegister PR
-		LEFT OUTER JOIN @Demographics D
-			ON  D.ID = PR.ID
-			AND D.CalendarId = PR.CalendarId
-	GROUP BY
-		 PR.CalendarId
-		,D.Department
-
-	INSERT INTO [Reports].[DemographicsMetrics] (CalendarId
-												,Department
-												,[Active Employees Paid]
-												,[Terminated Employees Paid]
-												,[Zero Net Pay Employees]
-												,[Employees With Net Pay Greater Than 5k]
-												,[Employees With Bonus Pay]
-												,[Employees With Multiple Payslips]
-												,[Total Employees]
-												,[Total Payslips Produced])
-	SELECT
-		 D.CalendarId
-		,D.Department
-		,COALESCE(AEP.Value,0) AS [Active Employees Paid]
-		,COALESCE(TEP.Value,0) AS [Terminated Employees Paid]
-		,COALESCE(ZNPE.Value,0) AS [Zero Net Pay Employees]
-		,COALESCE(EWNPGT5K.Value,0) AS [Employees With Net Pay Greater Than 5k]
-		,COALESCE(EWBP.Value,0) AS [Employees With Bonus Pay]
-		,COALESCE(EWMP.Value,0) AS [Employees With Multiple Payslips]
-		,COALESCE(TE.Value,0) AS [Total Employees]
-		,COALESCE(TPP.Value,0) AS [Total Payslips Produced]
-	FROM
-		@DemographicsSummary D
-		LEFT OUTER JOIN @ActiveEmployeesPaid AEP
-			ON  AEP.CalendarId = D.CalendarId
-			AND (AEP.Department = D.Department OR (AEP.Department IS NULL AND D.Department IS NULL))
-		LEFT OUTER JOIN @TerminatedEmployeesPaid TEP
-			ON  TEP.CalendarId = D.CalendarId
-			AND (TEP.Department = D.Department OR (TEP.Department IS NULL AND D.Department IS NULL))
-		LEFT OUTER JOIN @ZeroNetPayEmployees ZNPE
-			ON  ZNPE.CalendarId = D.CalendarId
-			AND (ZNPE.Department = D.Department OR (ZNPE.Department IS NULL AND D.Department IS NULL))
-		LEFT OUTER JOIN @EmployeesWithNetPayGreaterThan5k EWNPGT5K
-			ON  EWNPGT5K.CalendarId = D.CalendarId
-			AND (EWNPGT5K.Department = D.Department OR (EWNPGT5K.Department IS NULL AND D.Department IS NULL))
-		LEFT OUTER JOIN @EmployeesWithBonusPay EWBP
-			ON  EWBP.CalendarId = D.CalendarId
-			AND (EWBP.Department = D.Department OR (EWBP.Department IS NULL AND D.Department IS NULL))
-		LEFT OUTER JOIN @EmployeesWithMultiplePayslips EWMP
-			ON  EWMP.CalendarId = D.CalendarId
-			AND (EWMP.Department = D.Department OR (EWMP.Department IS NULL AND D.Department IS NULL))
-		LEFT OUTER JOIN @TotalEmployees TE
-			ON  TE.CalendarId = D.CalendarId
-			AND (TE.Department = D.Department OR (TE.Department IS NULL AND D.Department IS NULL))
-		LEFT OUTER JOIN @TotalPayslipsProduced TPP
-			ON  TPP.CalendarId = D.CalendarId
-			AND (TPP.Department = D.Department OR (TPP.Department IS NULL AND D.Department IS NULL))
-	WHERE
-			COALESCE(AEP.Value,0) <> 0
-		OR	COALESCE(TEP.Value,0) <> 0
-		OR	COALESCE(ZNPE.Value,0) <> 0
-		OR	COALESCE(EWNPGT5K.Value,0) <> 0
-		OR	COALESCE(EWBP.Value,0) <> 0
-		OR	COALESCE(EWMP.Value,0) <> 0
-		OR	COALESCE(TE.Value,0) <> 0
-		OR	COALESCE(TPP.Value,0) <> 0
-END
-
-
-PRINT N'Checking if [Reports].[DemographicsMetrics] has contents...';
-IF NOT EXISTS (SELECT TOP 1 1 FROM [Reports].[DemographicsMetrics])
-BEGIN
-	PRINT N'Starting [Reports].[DemographicsMetrics] migration...';
-	DECLARE @TempPayrollCalendar TABLE (CalendarId INT, IsMigrated BIT);
-	INSERT INTO @TempPayrollCalendar (CalendarId, IsMigrated)
-	SELECT pkPayrollCalendar AS CalendarId, 0 AS IsMigrated FROM [dbo].[PayrollCalendar]
-
-	WHILE (SELECT COUNT(1) FROM @TempPayrollCalendar WHERE IsMigrated = 0) > 0
-	BEGIN
-		DECLARE @TempCalendarId INT = (SELECT TOP 1 CalendarId FROM @TempPayrollCalendar WHERE IsMigrated = 0)
-		PRINT N'Migrating CalendarId: '+CAST(@TempCalendarId AS NVARCHAR(MAX))+'...';
-		EXEC [Reports].[usp_InsertDemographicsMetricsByPayrollCalendar] @TempCalendarId
-		UPDATE @TempPayrollCalendar SET IsMigrated = 1 WHERE CalendarId = @TempCalendarId
-	END
-	PRINT N'[Reports].[DemographicsMetrics] migration completed...';
-END
-ELSE
-BEGIN
-	PRINT N'Skipping [Reports].[DemographicsMetrics] migration because it has contents...';
-END
+CREATE TABLE [dbo].[VerticalMapping](
+	[Id] [int] IDENTITY(1,1) NOT NULL,
+	[EntityId] [int] NOT NULL
+)
