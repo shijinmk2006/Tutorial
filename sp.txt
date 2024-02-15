@@ -393,6 +393,381 @@ BEGIN
 END
 
 
+CREATE PROCEDURE [Reports].[usp_InsertDemographicsMetricsByPayrollCalendarsNoGrouping]
+	@CalendarIds [Reports].[udt_CalendarId] READONLY
+AS
+BEGIN
+	IF EXISTS(SELECT TOP 1 1 FROM [Reports].[DemographicsMetrics] WHERE CalendarId IN (SELECT CalendarId FROM @CalendarIds))
+	BEGIN
+		DELETE FROM [Reports].[DemographicsMetrics] WHERE CalendarId IN (SELECT CalendarId FROM @CalendarIds)
+	END
+
+	--Bonus pay columns
+	DECLARE @BonusPay NVARCHAR(MAX) = (
+	  SELECT 
+		STRING_AGG('COALESCE(PR.['+DBColumnName+'],0)','+') 
+	  FROM 
+		[dbo].[TemplateColumn] TC 
+		INNER JOIN [dbo].[MetricCategory] MC
+			ON MC.pkMetricCategory = TC.fkMetricCategory
+		INNER JOIN [dbo].[MetricSubCategory] MSC
+			ON MSC.pkMetricSubCategory = TC.fkMetricSubCategory
+	  WHERE 
+			TC.fkTemplate = 1 
+		AND MetricSubCategory = 'Bonus'
+	);
+
+	--Demographics
+	DROP TABLE IF EXISTS #Demographics
+	CREATE TABLE #Demographics (ID VARCHAR(1000), CalendarId INT, Department VARCHAR(1000), Type VARCHAR(1000), Status  VARCHAR(1000), JoiningDate DATE, TerminationDate DATE);
+	INSERT INTO #Demographics (ID, CalendarId, Department, Type, Status, JoiningDate, TerminationDate)
+	SELECT
+		 ID
+		,CalendarId
+		,Department
+		,Type
+		,Status
+		,JoiningDate
+		,TerminationDate
+	FROM (
+		SELECT
+			 D.ID
+			,PC.pkPayrollCalendar AS CalendarId
+			,D.Department
+			,D.EMPType AS Type
+			,D.EMPStatus AS Status
+			,D.JoiningDate
+			,D.TerminationDate
+			,ROW_NUMBER() OVER(PARTITION BY D.ID, PC.pkPayrollCalendar ORDER BY D.JoiningDate DESC, D.TerminationDate DESC) AS RN
+		FROM
+			[dbo].[Demographics] D
+			INNER JOIN [dbo].[FileQueueMaster] FQM
+				ON FQM.pkFileQueueMaster = D.fkFileQueueMaster
+			INNER JOIN [dbo].[PayrollCalendar] PC
+				ON PC.fkPayrollCalendarMaster = FQM.fkPayrollCalendarMaster
+		WHERE
+			PC.pkPayrollCalendar IN (SELECT CalendarId FROM @CalendarIds)) S
+	WHERE
+		S.RN = 1
+
+	--Demographics summary
+	DROP TABLE IF EXISTS #DemographicsSummary
+	CREATE TABLE #DemographicsSummary (CalendarId INT);
+	INSERT INTO #DemographicsSummary (CalendarId)
+	SELECT DISTINCT
+		 CalendarId
+		,Department
+	FROM
+		#Demographics
+	UNION
+	SELECT
+		 CalendarId
+		,NULL
+	FROM
+		@CalendarIds
+	ORDER BY
+		 CalendarId
+
+	--Payroll register
+	DROP TABLE IF EXISTS #PayrollRegister
+	CREATE TABLE #PayrollRegister (ID VARCHAR(1000), CalendarId INT, NetPay DECIMAL(18,2), BonusPay DECIMAL(18,2));
+	DECLARE @CalendarIdsStr NVARCHAR(MAX) = (SELECT '('+STRING_AGG(CAST(CalendarId AS NVARCHAR(MAX)),',')+')' FROM @CalendarIds);
+	DECLARE @PayrollRegisterScript NVARCHAR(MAX) = '
+	SELECT
+		 PR.EMPID AS ID
+		,FQ.fkPayrollCalendar AS CalendarId
+		,COALESCE(PR.NetPay,0) AS NetPay
+		,'+@BonusPay+' AS BonusPay
+	FROM
+		PayrollRegister PR
+		INNER JOIN FileQueue FQ
+			ON FQ.pkFileQueue = PR.fkFileQueue
+	WHERE
+		FQ.fkPayrollCalendar IN '+@CalendarIdsStr;
+	INSERT INTO #PayrollRegister (ID, CalendarId, NetPay, BonusPay)
+	EXEC SP_EXECUTESQL @PayrollRegisterScript
+
+	--Active Employees Paid
+	DROP TABLE IF EXISTS #ActiveEmployeesPaid
+	CREATE TABLE #ActiveEmployeesPaid (CalendarId INT, Value INT);
+	INSERT INTO #ActiveEmployeesPaid (CalendarId, Value)
+	SELECT
+		 PR.CalendarId
+		,COUNT(1) AS Value
+	FROM
+		(SELECT
+			 ID
+			,CalendarId
+			,SUM(NetPay) AS NetPay
+		FROM #PayrollRegister
+		GROUP BY
+			 ID
+			,CalendarId) PR
+		INNER JOIN #Demographics D
+			ON  D.ID = PR.ID
+			AND D.CalendarId = PR.CalendarId
+	WHERE
+			PR.NetPay <> 0
+		AND D.JoiningDate >= COALESCE(D.TerminationDate,CAST('1899-12-31' AS DATE))
+	GROUP BY
+		 PR.CalendarId
+
+	--Terminated Employees Paid
+	DROP TABLE IF EXISTS #TerminatedEmployeesPaid
+	CREATE TABLE #TerminatedEmployeesPaid (CalendarId INT, Value INT);
+	INSERT INTO #TerminatedEmployeesPaid (CalendarId, Value)
+	SELECT
+		 PR.CalendarId
+		,COUNT(1) AS Value
+	FROM
+		(SELECT
+			 ID
+			,CalendarId
+			,SUM(NetPay) AS NetPay
+		FROM #PayrollRegister
+		GROUP BY
+			 ID
+			,CalendarId) PR
+		INNER JOIN #Demographics D
+			ON  D.ID = PR.ID
+			AND D.CalendarId = PR.CalendarId
+	WHERE
+			PR.NetPay <> 0
+		AND (D.JoiningDate IS NULL OR (TerminationDate IS NOT NULL AND D.JoiningDate < D.TerminationDate))
+	GROUP BY
+		 PR.CalendarId
+
+	--Zero Net Pay Employees
+	DROP TABLE IF EXISTS #ZeroNetPayEmployees
+	CREATE TABLE #ZeroNetPayEmployees (CalendarId INT, Value INT);
+	INSERT INTO #ZeroNetPayEmployees (CalendarId, Value)
+	SELECT
+		 PR.CalendarId
+		,COUNT(1) AS Value
+	FROM
+		(SELECT
+			 ID
+			,CalendarId
+			,SUM(NetPay) AS NetPay
+		FROM #PayrollRegister
+		GROUP BY
+			 ID
+			,CalendarId) PR
+		LEFT OUTER JOIN #Demographics D
+			ON  D.ID = PR.ID
+			AND D.CalendarId = PR.CalendarId
+	WHERE
+		PR.NetPay = 0
+	GROUP BY
+		 PR.CalendarId
+	
+	--Employees With Net Pay Greater Than 5k
+	DROP TABLE IF EXISTS #EmployeesWithNetPayGreaterThan5k
+	CREATE TABLE #EmployeesWithNetPayGreaterThan5k (CalendarId INT,  Value INT);
+	INSERT INTO #EmployeesWithNetPayGreaterThan5k (CalendarId,  Value)
+	SELECT
+		 PR.CalendarId
+		,COUNT(1) AS Value
+	FROM
+		(SELECT
+			 ID
+			,CalendarId
+			,SUM(NetPay) AS NetPay
+		FROM #PayrollRegister
+		GROUP BY
+			 ID
+			,CalendarId) PR
+		LEFT OUTER JOIN #Demographics D
+			ON  D.ID = PR.ID
+			AND D.CalendarId = PR.CalendarId
+	WHERE
+		PR.NetPay > 5000
+	GROUP BY
+		 PR.CalendarId
+
+	--Employees With Bonus Pay
+	DROP TABLE IF EXISTS #EmployeesWithBonusPay
+	CREATE TABLE #EmployeesWithBonusPay (CalendarId INT,  Value INT);
+	INSERT INTO #EmployeesWithBonusPay (CalendarId, Value)
+	SELECT
+		 PR.CalendarId
+		,COUNT(1) AS Value
+	FROM
+		(SELECT
+			 ID
+			,CalendarId
+			,SUM(BonusPay) AS BonusPay
+		FROM #PayrollRegister
+		GROUP BY
+			 ID
+			,CalendarId) PR
+		LEFT OUTER JOIN #Demographics D
+			ON  D.ID = PR.ID
+			AND D.CalendarId = PR.CalendarId
+	WHERE
+		PR.BonusPay <> 0
+	GROUP BY
+		 PR.CalendarId
+
+	--Employees With Multiple Payslips
+	DROP TABLE IF EXISTS #EmployeesWithMultiplePayslips
+	CREATE TABLE #EmployeesWithMultiplePayslips (CalendarId INT, Value INT);
+	INSERT INTO #EmployeesWithMultiplePayslips (CalendarId,Value)
+	SELECT
+		 PR.CalendarId
+		,COUNT(1) AS Value
+	FROM
+		(SELECT
+			 ID
+			,CalendarId
+		FROM #PayrollRegister
+		GROUP BY
+			 ID
+			,CalendarId
+		HAVING
+			COUNT(1) > 1) PR
+		LEFT OUTER JOIN #Demographics D
+			ON  D.ID = PR.ID
+			AND D.CalendarId = PR.CalendarId
+	GROUP BY
+		 PR.CalendarId
+
+	--Total Employees
+	DROP TABLE IF EXISTS #TotalEmployees
+	CREATE TABLE #TotalEmployees (CalendarId INT, Value INT);
+	INSERT INTO #TotalEmployees (CalendarId, Value)
+	SELECT
+		 ISNULL(PR.CalendarId, D.CalendarId) AS CalendarId
+		,COUNT(1) AS Value
+	FROM
+		(SELECT DISTINCT
+			 ID
+			,CalendarId
+		FROM #PayrollRegister) PR
+		FULL OUTER JOIN #Demographics D
+			ON  D.ID = PR.ID
+			AND D.CalendarId = PR.CalendarId
+	GROUP BY
+		 ISNULL(PR.CalendarId, D.CalendarId)
+	
+	--Total Payslips Produced
+	DROP TABLE IF EXISTS #TotalPayslipsProduced
+	CREATE TABLE #TotalPayslipsProduced (CalendarId INT,  Value INT);
+	INSERT INTO #TotalPayslipsProduced (CalendarId, Value)
+	SELECT
+		 PR.CalendarId
+		,COUNT(1) AS Value
+	FROM
+		#PayrollRegister PR
+		LEFT OUTER JOIN #Demographics D
+			ON  D.ID = PR.ID
+			AND D.CalendarId = PR.CalendarId
+	GROUP BY
+		 PR.CalendarId
+
+	--Hourly Employees
+ 	DROP TABLE IF EXISTS #HourlyEmployees
+ 	CREATE TABLE #HourlyEmployees (CalendarId INT, Value INT);
+	INSERT INTO #HourlyEmployees (CalendarId, Value)
+	SELECT
+		 D.CalendarId AS CalendarId
+		,COUNT(1) AS Value
+	FROM
+		#Demographics D
+	WHERE
+			D.Type LIKE '%Hourly%'
+		OR	D.Type LIKE '%Daily%'
+	GROUP BY
+		 D.CalendarId
+
+
+	--Active Hourly Employees
+	DROP TABLE IF EXISTS #ActiveHourlyEmployees
+	CREATE TABLE #ActiveHourlyEmployees (CalendarId INT, Value INT);
+	INSERT INTO #ActiveHourlyEmployees (CalendarId,  Value)
+	SELECT
+		 D.CalendarId AS CalendarId
+		,D.Department
+		,COUNT(1) AS Value
+	FROM
+		#Demographics D
+	WHERE
+			(D.Type LIKE '%Hourly%' OR D.Type LIKE '%Daily%')
+		AND D.Status = 'Active Assignment'
+	GROUP BY
+		 D.CalendarId
+		,D.Department
+
+	INSERT INTO [Reports].[DemographicsMetricsNew] (CalendarId
+												,[Active Employees Paid]
+												,[Terminated Employees Paid]
+												,[Zero Net Pay Employees]
+												,[Employees With Net Pay Greater Than 5k]
+												,[Employees With Bonus Pay]
+												,[Employees With Multiple Payslips]
+												,[Total Employees]
+												,[Total Payslips Produced]
+												,[Hourly Employees]
+												,[Active Hourly Employees])
+	SELECT
+		 D.CalendarId
+		,COALESCE(AEP.Value,0) AS [Active Employees Paid]
+		,COALESCE(TEP.Value,0) AS [Terminated Employees Paid]
+		,COALESCE(ZNPE.Value,0) AS [Zero Net Pay Employees]
+		,COALESCE(EWNPGT5K.Value,0) AS [Employees With Net Pay Greater Than 5k]
+		,COALESCE(EWBP.Value,0) AS [Employees With Bonus Pay]
+		,COALESCE(EWMP.Value,0) AS [Employees With Multiple Payslips]
+		,COALESCE(TE.Value,0) AS [Total Employees]
+		,COALESCE(TPP.Value,0) AS [Total Payslips Produced]
+		,COALESCE(HE.Value,0) AS [Hourly Employees]
+		,COALESCE(AHE.Value,0) AS [Active Hourly Employees]
+	FROM
+		#DemographicsSummary D
+		LEFT OUTER JOIN #ActiveEmployeesPaid AEP
+			ON  AEP.CalendarId = D.CalendarId
+			
+		LEFT OUTER JOIN #TerminatedEmployeesPaid TEP
+			ON  TEP.CalendarId = D.CalendarId
+		
+		LEFT OUTER JOIN #ZeroNetPayEmployees ZNPE
+			ON  ZNPE.CalendarId = D.CalendarId
+			
+		LEFT OUTER JOIN #EmployeesWithNetPayGreaterThan5k EWNPGT5K
+			ON  EWNPGT5K.CalendarId = D.CalendarId
+			
+		LEFT OUTER JOIN #EmployeesWithBonusPay EWBP
+			ON  EWBP.CalendarId = D.CalendarId
+			
+		LEFT OUTER JOIN #EmployeesWithMultiplePayslips EWMP
+			ON  EWMP.CalendarId = D.CalendarId
+			
+		LEFT OUTER JOIN #TotalEmployees TE
+			ON  TE.CalendarId = D.CalendarId
+			
+		LEFT OUTER JOIN #TotalPayslipsProduced TPP
+			ON  TPP.CalendarId = D.CalendarId
+			
+		LEFT OUTER JOIN #HourlyEmployees HE
+			ON  HE.CalendarId = D.CalendarId
+			
+		LEFT OUTER JOIN #ActiveHourlyEmployees AHE
+			ON  AHE.CalendarId = D.CalendarId
+			
+	WHERE
+			COALESCE(AEP.Value,0) <> 0
+		OR	COALESCE(TEP.Value,0) <> 0
+		OR	COALESCE(ZNPE.Value,0) <> 0
+		OR	COALESCE(EWNPGT5K.Value,0) <> 0
+		OR	COALESCE(EWBP.Value,0) <> 0
+		OR	COALESCE(EWMP.Value,0) <> 0
+		OR	COALESCE(TE.Value,0) <> 0
+		OR	COALESCE(TPP.Value,0) <> 0
+		OR	COALESCE(HE.Value,0) <> 0
+		OR	COALESCE(AHE.Value,0) <> 0
+END
+
+
+
 
 ALTER PROCEDURE [dbo].[usp_InsertMetricsCalculationDemographics]
 @fileQueueMasterId INT 
@@ -424,20 +799,21 @@ Begin
 		BEGIN TRY
 			 SET NOCOUNT ON;
 				
-				Declare @SQL nvarchar(max);
-				SELECT @SQL = (Select distinct 'exec  [Reports].[usp_InsertMetricsByPayrollCalendar] ' + 
-							  convert(varchar(8),pkPayrollCalendar) + ';' 
-							  from #TempPayrollCalendarIds
-							  FOR XML PATH(''))
-				exec sp_executesql @SQL;
-  
-
 				Declare @SQLDemo nvarchar(max);
 				SELECT @SQLDemo = (Select distinct 'exec  [Reports].[usp_InsertDemographicsMetricsByPayrollCalendar] ' + 
 							  convert(varchar(8),pkPayrollCalendar) + ';' 
 							  from #TempPayrollCalendarIds
 							  FOR XML PATH(''))
 				exec sp_executesql @SQLDemo;
+
+				Declare @SQLDemoNo nvarchar(max);
+				SELECT @SQLDemoNo = (Select distinct 'exec  [Reports].[usp_InsertDemographicsMetricsByPayrollCalendarsNoGrouping] ' + 
+							  convert(varchar(8),pkPayrollCalendar) + ';' 
+							  from #TempPayrollCalendarIds
+							  FOR XML PATH(''))
+				exec sp_executesql @SQLDemoNo;
+
+
 			COMMIT TRANSACTION
 		END TRY
 	BEGIN CATCH
