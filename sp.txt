@@ -23,3 +23,16 @@ WHERE t.TemplateName = @TemplateName
 
  EXEC(@sql)
 
+
+for EMPID case apply below cases when column value comes
+
+for text  00000.123                output should be 0.123          
+for text  0.123                    output should be 0.123
+10000.12313                        output should be 10000.12313
+abc                                output should be abc
+12345678                           output should be 12345678
+1234567891234567                   output should be 1234567891234567
+123hsgs.019187221ssd               output should be 123hsgs.019187221ssd
+000123                             output should be 123
+1234567891234567.181726363633      output should be 1234567891234567.181726363633
+
