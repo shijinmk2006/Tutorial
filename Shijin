@@ -1,1 +1,32 @@
 
+CREATE PROCEDURE [dbo].[usp_GetStagingData]
+    @TemplateName VARCHAR(100),
+    @FileQueueId INT
+AS
+BEGIN
+    DECLARE @columnList VARCHAR(MAX), 
+            @sql VARCHAR(MAX), 
+            @tableName VARCHAR(50),
+            @tblPrimaryColumn VARCHAR(50)
+
+    SELECT @columnList = COALESCE(@columnList+',','') + 
+        CASE 
+            WHEN tc.columntype = 'Date' THEN 
+                'TRY_PARSE([' + tc.DBColumnName + '] AS Date) AS ' + tc.DBColumnName
+            WHEN tc.DBColumnName = 'EMPID' THEN 
+                'CASE ' +
+                    'WHEN TRY_CONVERT(FLOAT, [' + tc.DBColumnName + ']) IS NOT NULL AND [' + tc.DBColumnName + '] NOT LIKE ''%[^0-9.]%'' THEN ' +
+                        'CAST(CAST([' + tc.DBColumnName + '] AS FLOAT) AS VARCHAR(255)) ' +
+                    'ELSE [' + tc.DBColumnName + '] ' +
+                'END AS [' + tc.DBColumnName + ']'
+            ELSE 
+                '[' + tc.DBColumnName + ']'
+        END
+    FROM templateColumn tc 
+    INNER JOIN Template t ON t.pkTemplate = tc.fkTemplate
+    WHERE t.TemplateName = @TemplateName
+
+    SET @sql = 'SELECT ' + CAST(@FileQueueId AS VARCHAR(10)) + ' AS fkFileQueue, ' + @columnList + ' FROM PayRollRegisterStage WHERE fkFileQueue = ' + CAST(@FileQueueId AS VARCHAR(10))
+
+    EXEC(@sql)
+END
